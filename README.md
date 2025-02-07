@@ -127,33 +127,3 @@ JWT_SECRET=your_jwt_secret
 ## 📄 License
 
 This project is licensed under the MIT License.
-
----
-
-## 🚀 .gitignore File
-
-```
-# Node modules
-node_modules/
-
-# Environment variables
-.env
-
-# Build files
-dist/
-build/
-
-# Logs
-npm-debug.log
-yarn-debug.log
-yarn-error.log
-
-# IDE folders
-.vscode/
-.idea/
-
-# OS files
-.DS_Store
-Thumbs.db
-```
-
