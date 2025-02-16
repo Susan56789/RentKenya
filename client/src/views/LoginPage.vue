@@ -120,24 +120,31 @@ export default {
   },
   methods: {
     async handleLogin() {
-      this.error = '';
-      this.isLoading = true;
+    this.error = '';
+    this.isLoading = true;
 
-      try {
+    try {
         const response = await axios.post('https://rentkenya.onrender.com/api/users/login', {
-          email: this.email,
-          password: this.password
+            email: this.email,
+            password: this.password
         });
 
-        localStorage.setItem('token', response.data.token);
-        // Using Vue Router instead of direct window location
+        const token = response.data.token;
+        console.log('Received Token:', token);
+
+        if (!token) {
+            throw new Error('No token received from server');
+        }
+
+        localStorage.setItem('token', token);
         this.$router.push('/');
-      } catch (err) {
+    } catch (err) {
+        console.error('Login Error:', err.response?.data?.message, err);
         this.error = err.response?.data?.message || 'Login failed';
-      } finally {
+    } finally {
         this.isLoading = false;
-      }
     }
+}
   }
 };
 </script>
