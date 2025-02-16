@@ -13,29 +13,44 @@ router.post('/register', async (req, res) => {
     if (!username || !email || !password) {
         return res.status(400).json({ message: 'Username, email, and password are required' });
     }
-    
+
     try {
+        const normalizedEmail = email.toLowerCase();
+
         // Check if user already exists
-        const existingUser = await req.app.locals.users.findOne({ email });
+        const existingUser = await req.app.locals.users.findOne({ email: normalizedEmail });
+        console.log('Existing User:', existingUser);
         if (existingUser) {
             return res.status(409).json({ message: 'User with this email already exists' });
         }
-        
+
+        // Hash the password
         const hashedPassword = await bcrypt.hash(password, 10);
-        const user = { 
-            username, 
-            email, 
+        console.log('Generated Hash:', hashedPassword);
+
+        const user = {
+            username,
+            email: normalizedEmail,
             password: hashedPassword,
             phoneNumber: phoneNumber || '',
             createdAt: new Date()
         };
-        
+
+        // Insert the user
         const result = await req.app.locals.users.insertOne(user);
-        res.status(201).json({ 
-            message: 'User registered', 
-            userId: result.insertedId 
-        });
+        console.log('Insert Result:', result);
+
+        if (result.acknowledged) {
+            res.status(201).json({
+                message: 'User registered',
+                userId: result.insertedId
+            });
+        } else {
+            throw new Error('User insertion failed');
+        }
+
     } catch (error) {
+        console.error('Registration Error:', error.message);
         res.status(500).json({ message: 'Error registering user', error: error.message });
     }
 });
@@ -46,32 +61,41 @@ router.post('/login', async (req, res) => {
     if (!email || !password) {
         return res.status(400).json({ message: 'Email and password required' });
     }
-    
+
     try {
         const user = await req.app.locals.users.findOne({ email });
-        if (!user || !(await bcrypt.compare(password, user.password))) {
-            return res.status(401).json({ message: 'Invalid credentials' });
+        console.log('User:', user);
+        if (!user) {
+            return res.status(401).json({ message: 'Invalid credentials: User not found' });
         }
-        
+
+        const passwordMatch = await bcrypt.compare(password, user.password);
+        console.log('Password Match:', passwordMatch);
+        if (!passwordMatch) {
+            return res.status(401).json({ message: 'Invalid credentials: Incorrect password' });
+        }
+
         const token = jwt.sign(
-            { userId: user._id.toString(), email: user.email }, 
-            process.env.JWT_SECRET, 
+            { userId: user._id.toString(), email: user.email },
+            process.env.JWT_SECRET,
             { expiresIn: '24h' }
         );
-        
-        res.json({ 
+
+        res.json({
             token,
-            user: { 
+            user: {
                 id: user._id,
-                username: user.username, 
+                username: user.username,
                 email: user.email,
                 phoneNumber: user.phoneNumber || ''
-            } 
+            }
         });
     } catch (error) {
+        console.error('Login Error:', error.message);
         res.status(500).json({ message: 'Login failed', error: error.message });
     }
 });
+
 
 // Get current user profile
 router.get('/me', auth, async (req, res) => {
