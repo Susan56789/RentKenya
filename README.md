@@ -42,7 +42,7 @@ RentKenya/
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/your-username/rentkenya.git
+git clone https://github.com/Susan56789/rentkenya.git
 cd rentkenya
 ```
 
