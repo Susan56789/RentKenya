@@ -91,11 +91,8 @@
 
 <script>
 import { BaseCard, CardHeader, CardTitle, CardContent } from '@components/layout';
-
 import { AlertCircle as AlertCircleIcon } from 'lucide-vue-next';
 import { BaseAlert, AlertDescription } from '@components/layout';
-
-
 import axios from 'axios';
 
 export default {
@@ -120,31 +117,40 @@ export default {
   },
   methods: {
     async handleLogin() {
-    this.error = '';
-    this.isLoading = true;
+      this.error = '';
+      this.isLoading = true;
 
-    try {
+      try {
+        // Configure axios to include credentials
         const response = await axios.post('https://rentkenya.onrender.com/api/users/login', {
-            email: this.email,
-            password: this.password
+          email: this.email,
+          password: this.password
+        }, {
+          headers: {
+            'Content-Type': 'application/json'
+          }
         });
 
-        const token = response.data.token;
-        console.log('Received Token:', token);
-
+        const { token } = response.data;
+        
         if (!token) {
-            throw new Error('No token received from server');
+          throw new Error('No token received from server');
         }
 
-        localStorage.setItem('token', token);
+        // Store token with Bearer prefix
+        localStorage.setItem('token', `Bearer ${token}`);
+        
+        // Configure axios defaults for future requests
+        axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+
         this.$router.push('/');
-    } catch (err) {
-        console.error('Login Error:', err.response?.data?.message, err);
-        this.error = err.response?.data?.message || 'Login failed';
-    } finally {
+      } catch (err) {
+        console.error('Login Error:', err);
+        this.error = err.response?.data?.message || 'Login failed. Please check your credentials.';
+      } finally {
         this.isLoading = false;
+      }
     }
-}
   }
 };
 </script>

@@ -58,34 +58,45 @@ router.post('/register', async (req, res) => {
 // Login User
 router.post('/login', async (req, res) => {
     const { email, password } = req.body;
-
+  
     if (!email || !password) {
-        return res.status(400).json({ message: 'Email and password are required' });
+      return res.status(400).json({ message: 'Email and password are required' });
     }
-
+  
     try {
-        const user = await req.app.locals.users.findOne({ email });
-        if (!user) {
-            return res.status(401).json({ message: 'Invalid email or password' });
+      const user = await req.app.locals.users.findOne({ email });
+      if (!user) {
+        return res.status(401).json({ message: 'Invalid email or password' });
+      }
+  
+      const isMatch = await bcrypt.compare(password, user.password);
+      if (!isMatch) {
+        return res.status(401).json({ message: 'Invalid email or password' });
+      }
+  
+      
+      const token = jwt.sign(
+        {
+          userId: user._id,
+          email: user.email,
+          
+        },
+        process.env.JWT_SECRET,
+        { expiresIn: '24h' } 
+      );
+  
+      res.json({
+        token,
+        user: {
+          email: user.email,
+          id: user._id
         }
-
-        const isMatch = await bcrypt.compare(password, user.password);
-        if (!isMatch) {
-            return res.status(401).json({ message: 'Invalid email or password' });
-        }
-
-        const token = jwt.sign(
-            { userId: user._id, email: user.email },
-            process.env.JWT_SECRET,
-            { expiresIn: '1h' }
-        );
-
-        res.json({ token });
+      });
     } catch (error) {
-        console.error('Login Error:', error.message);
-        res.status(500).json({ message: 'Server error during login' });
+      console.error('Login Error:', error);
+      res.status(500).json({ message: 'Server error during login' });
     }
-});
+  });
 
 // Get current user profile
 router.get('/me', auth, async (req, res) => {
