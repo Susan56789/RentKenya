@@ -11,13 +11,13 @@
             <span class="font-bold text-xl text-white tracking-tight">RentKenya</span>
           </router-link>
         </div>
-        
+
         <!-- Search Section - Hidden on mobile, visible on medium screens and up -->
         <div class="hidden md:block flex-1 max-w-md mx-4">
           <div class="relative">
-            <input 
-              type="search" 
-              placeholder="Search for houses..." 
+            <input
+              type="search"
+              placeholder="Search for houses..."
               class="w-full bg-white rounded-full px-4 py-2 pl-10 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-white focus:ring-opacity-50"
             />
             <div class="absolute left-3 top-2.5">
@@ -27,31 +27,70 @@
             </div>
           </div>
         </div>
-        
+
         <!-- Navigation Links -->
         <div class="flex items-center space-x-4">
-          <router-link 
-            to="/add-house" 
-            class="text-white hover:bg-blue-800 px-3 py-2 rounded-md text-sm font-medium transition duration-150 ease-in-out"
-          >
-            Post House
-          </router-link>
-          <router-link 
-            to="/login" 
-            class="bg-white text-blue-700 hover:bg-blue-100 px-3 py-2 rounded-md text-sm font-medium transition duration-150 ease-in-out"
-          >
-            Login
-          </router-link>
+          <!-- Show these options only when user is logged in -->
+          <template v-if="isAuthenticated">
+            <router-link
+              to="/add-house"
+              class="text-white hover:bg-blue-800 px-3 py-2 rounded-md text-sm font-medium transition duration-150 ease-in-out"
+            >
+              Post House
+            </router-link>
+            <div class="relative" @click="toggleDropdown" @keydown.escape="isDropdownOpen = false">
+              <button 
+                class="flex items-center text-white hover:bg-blue-800 px-3 py-2 rounded-md text-sm font-medium transition duration-150 ease-in-out"
+              >
+                <span class="mr-2">Profile</span>
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+              
+              <!-- Dropdown Menu -->
+              <div v-if="isDropdownOpen" class="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1">
+                <router-link
+                  to="/profile"
+                  class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                >
+                  View Profile
+                </router-link>
+                <router-link
+                  to="/my-listings"
+                  class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                >
+                  My Listings
+                </router-link>
+                <button
+                  @click="handleLogout"
+                  class="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                >
+                  Logout
+                </button>
+              </div>
+            </div>
+          </template>
+          
+          <!-- Show this option only when user is not logged in -->
+          <template v-else>
+            <router-link
+              to="/login"
+              class="bg-white text-blue-700 hover:bg-blue-100 px-3 py-2 rounded-md text-sm font-medium transition duration-150 ease-in-out"
+            >
+              Login
+            </router-link>
+          </template>
         </div>
       </div>
     </div>
-    
+
     <!-- Mobile Search - Only visible on small screens -->
     <div class="md:hidden px-4 pb-3">
       <div class="relative">
-        <input 
-          type="search" 
-          placeholder="Search for houses..." 
+        <input
+          type="search"
+          placeholder="Search for houses..."
           class="w-full bg-white rounded-full px-4 py-2 pl-10 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-white focus:ring-opacity-50"
         />
         <div class="absolute left-3 top-2.5">
@@ -63,3 +102,42 @@
     </div>
   </nav>
 </template>
+
+<script>
+export default {
+  name: 'NavbarPage',
+  data() {
+    return {
+      isDropdownOpen: false
+    };
+  },
+  computed: {
+    isAuthenticated() {
+      return !!localStorage.getItem('token');
+    }
+  },
+  methods: {
+    toggleDropdown() {
+      this.isDropdownOpen = !this.isDropdownOpen;
+    },
+    handleLogout() {
+      // Clear token and other auth data
+      localStorage.removeItem('token');
+      this.isDropdownOpen = false;
+      // Redirect to home page
+      this.$router.push('/');
+    }
+  },
+  mounted() {
+    // Close dropdown when clicking outside
+    document.addEventListener('click', (e) => {
+      if (!this.$el.contains(e.target)) {
+        this.isDropdownOpen = false;
+      }
+    });
+  },
+  beforeUnmount() {
+    document.removeEventListener('click', this.handleClickOutside);
+  }
+};
+</script>

@@ -4,6 +4,8 @@ import AddHouse from '../views/AddHouse.vue';
 import LoginPage from '../views/LoginPage.vue';
 import RegisterPage from '../views/RegisterPage.vue';
 import HouseDetails from '../views/HouseDetails.vue';
+import HouseListings from '@/components/HouseListings.vue';
+import UserProfile from '@/components/UserProfile.vue';
 
 const routes = [
   { path: '/', component: HomePage },
@@ -11,6 +13,18 @@ const routes = [
   { path: '/login', component: LoginPage },
   { path: '/register', component: RegisterPage },
   { path: '/house/:id', component: HouseDetails, props: true },
+  {
+    path: '/profile',
+    name: 'UserProfile',
+    component: UserProfile,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/my-listings',
+    name: 'HouseListings',
+    component: HouseListings,
+    meta: { requiresAuth: true }
+  }
 ];
 
 export default createRouter({
