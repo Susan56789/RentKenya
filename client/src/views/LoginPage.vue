@@ -34,14 +34,24 @@
             <label for="password" class="block text-sm font-medium text-gray-700">
               Password
             </label>
-            <input
-              id="password"
-              type="password"
-              v-model="password"
-              required
-              class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              placeholder="••••••••"
-            />
+            <div class="relative">
+              <input
+                id="password"
+                :type="showPassword ? 'text' : 'password'"
+                v-model="password"
+                required
+                class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="••••••••"
+              />
+              <button 
+                type="button"
+                @click="showPassword = !showPassword"
+                class="absolute inset-y-0 right-0 pr-3 flex items-center"
+              >
+                <eye-icon v-if="!showPassword" class="h-5 w-5 text-gray-400" />
+                <eye-off-icon v-else class="h-5 w-5 text-gray-400" />
+              </button>
+            </div>
           </div>
 
           <div class="flex items-center justify-between">
@@ -91,7 +101,7 @@
 
 <script>
 import { BaseCard, CardHeader, CardTitle, CardContent } from '@components/layout';
-import { AlertCircle as AlertCircleIcon } from 'lucide-vue-next';
+import { AlertCircle as AlertCircleIcon, Eye as EyeIcon, EyeOff as EyeOffIcon } from 'lucide-vue-next';
 import { BaseAlert, AlertDescription } from '@components/layout';
 import axios from 'axios';
 
@@ -104,7 +114,9 @@ export default {
     CardContent,
     BaseAlert,
     AlertDescription,
-    AlertCircleIcon
+    AlertCircleIcon,
+    EyeIcon,
+    EyeOffIcon
   },
   data() {
     return {
@@ -112,7 +124,8 @@ export default {
       password: '',
       rememberMe: false,
       error: '',
-      isLoading: false
+      isLoading: false,
+      showPassword: false
     };
   },
   methods: {
@@ -120,15 +133,15 @@ export default {
       this.error = '';
       this.isLoading = true;
 
+      if (!this.validateForm()) {
+        this.isLoading = false;
+        return;
+      }
+
       try {
-        // Configure axios to include credentials
         const response = await axios.post('https://rentkenya.onrender.com/api/users/login', {
-          email: this.email,
+          email: this.email.trim(),
           password: this.password
-        }, {
-          headers: {
-            'Content-Type': 'application/json'
-          }
         });
 
         const { token } = response.data;
@@ -137,19 +150,30 @@ export default {
           throw new Error('No token received from server');
         }
 
-        // Store token with Bearer prefix
         localStorage.setItem('token', `Bearer ${token}`);
-        
-        // Configure axios defaults for future requests
         axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
 
         this.$router.push('/');
       } catch (err) {
         console.error('Login Error:', err);
-        this.error = err.response?.data?.message || 'Login failed. Please check your credentials.';
+        this.error = err.response?.data?.message || 'Invalid email or password';
       } finally {
         this.isLoading = false;
       }
+    },
+    validateForm() {
+      if (!this.email || !this.password) {
+        this.error = 'Please fill in all fields';
+        return false;
+      }
+      
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(this.email)) {
+        this.error = 'Please enter a valid email address';
+        return false;
+      }
+
+      return true;
     }
   }
 };

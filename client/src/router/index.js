@@ -6,12 +6,14 @@ import RegisterPage from '../views/RegisterPage.vue';
 import HouseDetails from '../views/HouseDetails.vue';
 import HouseListings from '@/components/HouseListings.vue';
 import UserProfile from '@/components/UserProfile.vue';
+import ForgotPassword from '@/views/ForgotPassword.vue';
 
 const routes = [
   { path: '/', component: HomePage },
   { path: '/add-house', component: AddHouse },
   { path: '/login', component: LoginPage },
   { path: '/register', component: RegisterPage },
+  {path: '/forgot-password', component: ForgotPassword},
   { path: '/house/:id', component: HouseDetails, props: true },
   {
     path: '/profile',
