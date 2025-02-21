@@ -13,12 +13,17 @@ const uri = process.env.MONGODB_URI;
 const client = new MongoClient(uri);
 
 // Middleware setup
-app.use(cors({
-    origin: '*',
-    methods: 'GET,POST,PUT,DELETE',
-    allowedHeaders: 'Content-Type,Authorization',
+const corsOptions = {
+    origin: ['http://localhost:8080', 'https://rent254.onrender.com'],
     credentials: true,
-}));
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    exposedHeaders: ['Content-Range', 'X-Content-Range'],
+    maxAge: 86400 // 24 hours
+  };
+
+  
+app.use(cors(corsOptions));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 

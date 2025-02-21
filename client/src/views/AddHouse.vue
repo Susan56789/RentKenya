@@ -230,8 +230,7 @@ export default {
         const response = await api.post('/api/houses', formData, {
           headers: {
             'Content-Type': 'multipart/form-data'
-          },
-          withCredentials: true
+          }
         });
 
         message.value = response.data.message || 'House added successfully!';
