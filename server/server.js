@@ -3,16 +3,23 @@ const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const { MongoClient } = require('mongodb');
-const path = require('path'); // Ensure path is imported
+const path = require('path');
+const fs = require('fs');
 
 // Initialize Express app
 const app = express();
 const PORT = process.env.PORT || 5050;
 
-// Serve uploaded images
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// Ensure the 'uploads' directory exists
+const uploadDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+}
 
-// MongoDB URI
+// Serve uploaded images
+app.use('/uploads', express.static(uploadDir));
+
+// MongoDB connection
 const uri = process.env.MONGODB_URI;
 const client = new MongoClient(uri, { useUnifiedTopology: true });
 
@@ -34,7 +41,7 @@ app.use(bodyParser.urlencoded({ extended: true }));
 const run = async () => {
     try {
         await client.connect();
-        console.log('Connected to the database');
+        console.log('✅ Connected to MongoDB');
 
         // Store database collections in `app.locals`
         const database = client.db('rentkenya');
@@ -48,20 +55,24 @@ const run = async () => {
         app.use('/api/users', userRoutes);
         app.use('/api/houses', houseRoutes);
 
-        // Handle graceful shutdown
-        process.on('SIGINT', async () => {
+        // Graceful shutdown handling
+        const closeDatabase = async () => {
+            console.log('🔄 Closing database connection...');
             await client.close();
-            console.log('MongoDB connection closed');
+            console.log('✅ MongoDB connection closed');
             process.exit(0);
-        });
+        };
+
+        process.on('SIGINT', closeDatabase);
+        process.on('SIGTERM', closeDatabase);
 
         // Start Express server
         app.listen(PORT, () => {
-            console.log(`Server running on http://localhost:${PORT}`);
+            console.log(`🚀 Server running on http://localhost:${PORT}`);
         });
 
     } catch (error) {
-        console.error('Error connecting to the database:', error);
+        console.error('❌ Error connecting to the database:', error.message);
         process.exit(1); // Exit process if connection fails
     }
 };
