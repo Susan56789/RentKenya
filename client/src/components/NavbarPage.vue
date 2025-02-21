@@ -1,13 +1,14 @@
+# NavbarComponent.vue
 <template>
   <nav class="bg-gradient-to-r from-gray-700 to-gray-600 shadow-lg">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       <div class="flex items-center justify-between h-16">
-        <!-- Logo Section with Fallback -->
+        <!-- Logo Section -->
         <div class="flex-shrink-0">
           <router-link to="/" class="flex items-center">
             <img 
               src="/Logo.png"
-              alt="RentKenya Logo"
+              alt="Logo"
               class="h-8 w-auto mr-2"
               @error="handleLogoError"
               v-if="!logoError"
@@ -31,7 +32,7 @@
           </router-link>
         </div>
 
-        <!-- Search Section -->
+        <!-- Desktop Search -->
         <div class="hidden md:block flex-1 max-w-md mx-4">
           <div class="relative">
             <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -51,14 +52,14 @@
 
         <!-- Navigation Links -->
         <div class="flex items-center space-x-4">
-          <template v-if="isAuthenticated">
+          <template v-if="auth.isAuthenticated()">
             <router-link
               to="/add-house"
               class="text-white hover:bg-gray-800 px-3 py-2 rounded-md text-sm font-medium transition duration-150 ease-in-out"
             >
               Post House
             </router-link>
-            <div class="relative" @click="toggleDropdown" @keydown.escape="closeDropdown">
+            <div class="relative" @click="toggleDropdown" @keydown.escape="closeDropdown" ref="dropdownRef">
               <button 
                 class="flex items-center text-white hover:bg-gray-800 px-3 py-2 rounded-md text-sm font-medium transition duration-150 ease-in-out"
               >
@@ -68,16 +69,21 @@
                 </svg>
               </button>
               
-              <div v-if="isDropdownOpen" class="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50">
+              <div 
+                v-if="isDropdownOpen" 
+                class="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50"
+              >
                 <router-link
                   to="/profile"
                   class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                  @click="closeDropdown"
                 >
                   View Profile
                 </router-link>
                 <router-link
                   to="/my-listings"
                   class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                  @click="closeDropdown"
                 >
                   My Listings
                 </router-link>
@@ -124,72 +130,79 @@
 </template>
 
 <script>
-import { ref, onMounted, onUnmounted } from 'vue';
-import { useRouter } from 'vue-router';
-import { useAuth } from '@/composables/useAuth';
+import { ref, onMounted, onUnmounted } from 'vue'
+import { useRouter } from 'vue-router'
+import { useAuth } from '@/composables/useAuth'
 
 export default {
-  name: 'NavbarPage',
+  name: 'NavbarComponent',
   
   setup() {
-    const router = useRouter();
-    const { isAuthenticated, setToken } = useAuth();
-    const isDropdownOpen = ref(false);
-    const searchQuery = ref('');
-    const logoError = ref(false);
+    const router = useRouter()
+    const auth = useAuth()
+    const dropdownRef = ref(null)
+    
+    // State
+    const isDropdownOpen = ref(false)
+    const searchQuery = ref('')
+    const logoError = ref(false)
 
+    // Methods
     const handleLogoError = () => {
-      logoError.value = true;
-    };
+      logoError.value = true
+    }
 
     const toggleDropdown = () => {
-      isDropdownOpen.value = !isDropdownOpen.value;
-    };
+      isDropdownOpen.value = !isDropdownOpen.value
+    }
 
     const closeDropdown = () => {
-      isDropdownOpen.value = false;
-    };
+      isDropdownOpen.value = false
+    }
 
     const handleLogout = () => {
-      setToken(null);
-      closeDropdown();
-      router.push('/');
-    };
-
-    const handleClickOutside = (e) => {
-      if (!e.target.closest('.relative')) {
-        closeDropdown();
-      }
-    };
+      auth.setToken(null)
+      closeDropdown()
+      router.push('/')
+    }
 
     const handleSearch = () => {
       if (searchQuery.value.trim()) {
         router.push({
           name: 'search',
           query: { q: searchQuery.value.trim() }
-        });
+        })
+        searchQuery.value = ''
       }
-    };
+    }
+
+    // Click outside handler
+    const handleClickOutside = (event) => {
+      if (dropdownRef.value && !dropdownRef.value.contains(event.target)) {
+        closeDropdown()
+      }
+    }
 
     onMounted(() => {
-      document.addEventListener('click', handleClickOutside);
-    });
+      document.addEventListener('click', handleClickOutside)
+    })
 
     onUnmounted(() => {
-      document.removeEventListener('click', handleClickOutside);
-    });
+      document.removeEventListener('click', handleClickOutside)
+    })
 
     return {
-      isAuthenticated,
+      auth,
       isDropdownOpen,
       searchQuery,
       logoError,
+      dropdownRef,
       handleLogoError,
       toggleDropdown,
       closeDropdown,
       handleLogout,
       handleSearch
-    };
+    }
   }
-};
+}
 </script>

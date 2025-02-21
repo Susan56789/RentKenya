@@ -1,6 +1,8 @@
+// axios.js
 import axios from 'axios';
+import { useAuth } from '@/composables/useAuth';
 
-const baseURL = process.env.NODE_ENV === 'production' 
+const baseURL = process.env.NODE_ENV === 'production'
   ? 'https://rentkenya.onrender.com'
   : 'http://localhost:5000';
 
@@ -26,17 +28,32 @@ api.interceptors.request.use(
 
 // Response interceptor
 api.interceptors.response.use(
-  response => response,
+  response => {
+    // Check for token renewal in response headers
+    const newToken = response.headers['x-new-token'];
+    if (newToken) {
+      // Update token
+      const { setToken } = useAuth();
+      setToken(newToken);
+    }
+    return response;
+  },
   error => {
     if (error.response) {
-      switch (error.response.status) {
+      const { status } = error.response;
+      const { setToken } = useAuth(); // Moved declaration outside case blocks
+      
+      switch (status) {
         case 401:
-          localStorage.removeItem('token');
+          // Clear token and redirect
+          setToken(null);
           window.location.href = '/login';
           break;
+          
         case 403:
           console.error('Access denied');
           break;
+          
         case 429:
           console.error('Rate limit exceeded');
           break;
