@@ -5,7 +5,7 @@
           <h1 class="text-2xl font-bold text-gray-900">My Listings</h1>
           <router-link
             to="/add-house"
-            class="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
+            class="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-gray-600 hover:bg-gray-700"
           >
             Add New Listing
           </router-link>
@@ -13,7 +13,7 @@
   
         <!-- Loading State -->
         <div v-if="isLoading" class="text-center py-12">
-          <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-600 mx-auto"></div>
         </div>
   
         <!-- Error State -->
@@ -41,7 +41,7 @@
           <div class="mt-6">
             <router-link
               to="/add-house"
-              class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
+              class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-gray-600 hover:bg-gray-700"
             >
               <svg
                 class="-ml-1 mr-2 h-5 w-5"
@@ -93,7 +93,7 @@
               <div class="mt-4 flex justify-end space-x-3">
                 <button
                   @click="editListing(listing._id)"
-                  class="px-3 py-1 text-sm text-blue-600 hover:text-blue-500"
+                  class="px-3 py-1 text-sm text-gray-600 hover:text-gray-500"
                 >
                   Edit
                 </button>

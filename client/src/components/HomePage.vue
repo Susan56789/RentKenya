@@ -10,7 +10,7 @@
           <select 
             id="location" 
             v-model="filters.location" 
-            class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+            class="w-full rounded-md border-gray-300 shadow-sm focus:border-gray-500 focus:ring-gray-500"
           >
             <option value="">All Locations</option>
             <option v-for="location in uniqueLocations" :key="location" :value="location">
@@ -25,7 +25,7 @@
           <select 
             id="priceRange" 
             v-model="filters.priceRange" 
-            class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+            class="w-full rounded-md border-gray-300 shadow-sm focus:border-gray-500 focus:ring-gray-500"
           >
             <option value="">Any Price</option>
             <option value="0-10000">Below 10,000</option>
@@ -42,7 +42,7 @@
           <select 
             id="houseType" 
             v-model="filters.type" 
-            class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+            class="w-full rounded-md border-gray-300 shadow-sm focus:border-gray-500 focus:ring-gray-500"
           >
             <option value="">All Types</option>
             <option value="Bed Sitter">Bed Sitter</option>
@@ -56,7 +56,7 @@
         <div class="flex items-end">
           <button 
             @click="applyFilters" 
-            class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md transition duration-150 ease-in-out"
+            class="w-full bg-gray-600 hover:bg-gray-700 text-white font-medium py-2 px-4 rounded-md transition duration-150 ease-in-out"
           >
             Apply Filters
           </button>
@@ -74,7 +74,7 @@
         <select 
           id="sortBy" 
           v-model="sortBy" 
-          class="rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+          class="rounded-md border-gray-300 shadow-sm focus:border-gray-500 focus:ring-gray-500"
         >
           <option value="newest">Newest First</option>
           <option value="priceAsc">Price: Low to High</option>
@@ -106,7 +106,7 @@
             <p class="text-gray-700 text-sm truncate">{{ house.location }}</p>
           </div>
           <h2 class="font-semibold text-lg mb-1 text-gray-800">{{ house.type }}</h2>
-          <p class="text-blue-600 font-bold mb-2">KES {{ formatPrice(house.price) }}</p>
+          <p class="text-gray-600 font-bold mb-2">KES {{ formatPrice(house.price) }}</p>
           <div class="flex items-center text-gray-600 text-sm mb-3">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -115,7 +115,7 @@
           </div>
           <router-link 
             :to="`/house/${house._id}`" 
-            class="block text-center bg-blue-50 hover:bg-blue-100 text-blue-700 font-medium py-2 px-4 rounded-md transition duration-150 ease-in-out"
+            class="block text-center bg-gray-50 hover:bg-gray-100 text-gray-700 font-medium py-2 px-4 rounded-md transition duration-150 ease-in-out"
           >
             View Details
           </router-link>
@@ -132,7 +132,7 @@
       <p class="text-gray-500">Try adjusting your filters or check back later for new listings.</p>
       <button 
         @click="resetFilters" 
-        class="mt-4 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200"
+        class="mt-4 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-gray-700 bg-gray-100 hover:bg-gray-200"
       >
         Reset Filters
       </button>
@@ -159,7 +159,7 @@
           :class="[
             'relative inline-flex items-center px-4 py-2 border text-sm font-medium',
             currentPage === page 
-              ? 'z-10 bg-blue-50 border-blue-500 text-blue-600' 
+              ? 'z-10 bg-gray-50 border-gray-500 text-gray-600' 
               : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
           ]"
         >
@@ -182,7 +182,7 @@
     <!-- Loading State -->
     <div v-if="loading" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div class="bg-white p-6 rounded-lg shadow-xl">
-        <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+        <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-600 mx-auto"></div>
         <p class="text-center mt-4 text-gray-700">Loading houses...</p>
       </div>
     </div>

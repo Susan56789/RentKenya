@@ -6,7 +6,7 @@
           <div class="px-4 py-5 sm:px-6 border-b border-gray-200">
             <div class="flex items-center justify-between">
               <div class="flex items-center">
-                <div class="h-16 w-16 rounded-full bg-blue-600 flex items-center justify-center">
+                <div class="h-16 w-16 rounded-full bg-gray-600 flex items-center justify-center">
                   <span class="text-2xl text-white font-semibold">
                     {{ userInitials }}
                   </span>
@@ -18,7 +18,7 @@
               </div>
               <button
                 @click="isEditing = !isEditing"
-                class="px-4 py-2 text-sm font-medium text-blue-600 hover:text-blue-500"
+                class="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-500"
               >
                 {{ isEditing ? 'Cancel' : 'Edit Profile' }}
               </button>
@@ -34,7 +34,7 @@
                   <input
                     v-model="editForm.fullName"
                     type="text"
-                    class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-gray-500 focus:border-gray-500"
                   />
                 </div>
                 <div>
@@ -42,7 +42,7 @@
                   <input
                     v-model="editForm.phone"
                     type="tel"
-                    class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-gray-500 focus:border-gray-500"
                   />
                 </div>
                 <div>
@@ -50,7 +50,7 @@
                   <input
                     v-model="editForm.location"
                     type="text"
-                    class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-gray-500 focus:border-gray-500"
                   />
                 </div>
                 <div>
@@ -58,7 +58,7 @@
                   <textarea
                     v-model="editForm.bio"
                     rows="3"
-                    class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-gray-500 focus:border-gray-500"
                   ></textarea>
                 </div>
                 <div class="flex justify-end space-x-3">
@@ -71,7 +71,7 @@
                   </button>
                   <button
                     type="submit"
-                    class="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    class="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-gray-600 hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
                   >
                     Save Changes
                   </button>
