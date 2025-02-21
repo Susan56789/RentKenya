@@ -1,10 +1,8 @@
-// axios.js
 import axios from 'axios';
 import { useAuth } from '@/composables/useAuth';
 
 const baseURL = process.env.NODE_ENV === 'production'
-  ? 'https://rentkenya.onrender.com'
-  : 'http://localhost:5000';
+  | 'https://rentkenya.onrender.com';
 
 const api = axios.create({
   baseURL,
@@ -41,7 +39,7 @@ api.interceptors.response.use(
   error => {
     if (error.response) {
       const { status } = error.response;
-      const { setToken } = useAuth(); // Moved declaration outside case blocks
+      const { setToken } = useAuth(); 
       
       switch (status) {
         case 401:

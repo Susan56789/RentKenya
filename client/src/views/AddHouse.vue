@@ -13,7 +13,7 @@
           type="text"
           required
           placeholder="Enter house location"
-          class="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          class="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-gray-500 focus:border-gray-500"
         />
       </div>
 
@@ -26,7 +26,7 @@
           type="number"
           required
           placeholder="Enter price"
-          class="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          class="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-gray-500 focus:border-gray-500"
         />
       </div>
 
@@ -38,7 +38,7 @@
           v-model="formData.datePosted"
           type="date"
           required
-          class="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          class="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-gray-500 focus:border-gray-500"
         />
       </div>
 
@@ -49,7 +49,7 @@
           id="type"
           v-model="formData.type"
           required
-          class="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          class="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-gray-500 focus:border-gray-500"
         >
           <option value="" disabled>Select Type</option>
           <option v-for="type in houseTypes" :key="type" :value="type">
@@ -65,7 +65,7 @@
           id="purpose"
           v-model="formData.purpose"
           required
-          class="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          class="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-gray-500 focus:border-gray-500"
         >
           <option value="" disabled>Select Purpose</option>
           <option v-for="purpose in purposes" :key="purpose" :value="purpose">
@@ -85,7 +85,7 @@
           @change="handleFileUpload"
           multiple
           accept="image/jpeg,image/jpg,image/png"
-          class="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          class="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-gray-500 focus:border-gray-500"
         />
         
         <p v-if="photoError" class="text-sm text-red-500 mt-1">{{ photoError }}</p>
@@ -115,7 +115,7 @@
       <button
         type="submit"
         :disabled="isSubmitting || !isFormValid"
-        class="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+        class="w-full bg-gray-600 text-white py-2 px-4 rounded-md hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {{ isSubmitting ? 'Adding...' : 'Add House' }}
       </button>
@@ -133,24 +133,41 @@
 </template>
 
 <script>
-import { ref, reactive, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
-import { useAuth } from '@/composables/useAuth'
-import axios from '@/utils/axios'
+import { ref, reactive, computed } from 'vue';
+import { useRouter } from 'vue-router';
+import { useAuth } from '@/composables/useAuth';
+import axios from 'axios';
+
+// Create API instance with base URL
+const api = axios.create({
+  baseURL: process.env.NODE_ENV === 'production'
+    ? 'https://rentkenya.onrender.com'
+    : 'http://localhost:5000'
+});
 
 export default {
   name: 'AddHouse',
   
   setup() {
-    const router = useRouter()
-    const auth = useAuth()
+    const router = useRouter();
+    const auth = useAuth();
 
-    // Check authentication on mount
-    onMounted(() => {
-      if (!auth.isAuthenticated()) {
-        router.push('/login')
-      }
-    })
+    // Form state
+    const formData = reactive({
+      location: '',
+      price: '',
+      datePosted: new Date().toISOString().split('T')[0],
+      type: '',
+      purpose: ''
+    });
+
+    // File handling state
+    const photos = ref([]);
+    const photoPreviewUrls = ref([]);
+    const photoError = ref('');
+    const isSubmitting = ref(false);
+    const successMessage = ref('');
+    const errorMessage = ref('');
 
     // Constants
     const houseTypes = [
@@ -161,172 +178,193 @@ export default {
       'Three Bedroom',
       'Four Bedroom',
       'Five Bedroom'
-    ]
+    ];
 
-    const purposes = ['Rent', 'Sale']
-
-    // Form state
-    const formData = reactive({
-      location: '',
-      price: '',
-      datePosted: new Date().toISOString().split('T')[0],
-      type: '',
-      purpose: ''
-    })
-
-    // File handling state
-    const photos = ref([])
-    const photoPreviewUrls = ref([])
-    const photoError = ref('')
-
-    // Form submission state
-    const isSubmitting = ref(false)
-    const successMessage = ref('')
-    const errorMessage = ref('')
+    const purposes = ['Rent', 'Sale'];
 
     // Computed property for form validation
     const isFormValid = computed(() => {
       return (
         formData.location &&
-        formData.price &&
+        formData.price > 0 &&
         formData.datePosted &&
         formData.type &&
         formData.purpose &&
         photos.value.length >= 2 &&
-        photos.value.length <= 5
-      )
-    })
+        photos.value.length <= 5 &&
+        !photoError.value
+      );
+    });
 
-    // Methods
+    const validateForm = () => {
+      if (!formData.location.trim()) {
+        errorMessage.value = 'Location is required';
+        return false;
+      }
+      if (!formData.price || formData.price <= 0) {
+        errorMessage.value = 'Valid price is required';
+        return false;
+      }
+      if (!formData.datePosted) {
+        errorMessage.value = 'Available date is required';
+        return false;
+      }
+      if (!formData.type) {
+        errorMessage.value = 'House type is required';
+        return false;
+      }
+      if (!formData.purpose) {
+        errorMessage.value = 'Purpose is required';
+        return false;
+      }
+      if (photos.value.length < 2) {
+        errorMessage.value = 'Minimum 2 photos required';
+        return false;
+      }
+      if (photos.value.length > 5) {
+        errorMessage.value = 'Maximum 5 photos allowed';
+        return false;
+      }
+      return true;
+    };
+
     const handleFileUpload = (event) => {
-      const files = Array.from(event.target.files || [])
+      const files = Array.from(event.target.files || []);
       
       // Validate number of files
       if (files.length > 5) {
-        photoError.value = 'Maximum 5 photos allowed'
-        return
+        photoError.value = 'Maximum 5 photos allowed';
+        return;
       }
 
       if (files.length < 2) {
-        photoError.value = 'Minimum 2 photos required'
-        return
+        photoError.value = 'Minimum 2 photos required';
+        return;
       }
 
       // Validate file types and sizes
       const isValid = files.every(file => {
-        const validTypes = ['image/jpeg', 'image/jpg', 'image/png']
-        const maxSize = 5 * 1024 * 1024 // 5MB
+        const validTypes = ['image/jpeg', 'image/jpg', 'image/png'];
+        const maxSize = 5 * 1024 * 1024; // 5MB
 
         if (!validTypes.includes(file.type)) {
-          photoError.value = 'Only JPG, JPEG and PNG files allowed'
-          return false
+          photoError.value = 'Only JPG, JPEG and PNG files allowed';
+          return false;
         }
 
         if (file.size > maxSize) {
-          photoError.value = 'Each file must be less than 5MB'
-          return false
+          photoError.value = 'Each file must be less than 5MB';
+          return false;
         }
 
-        return true
-      })
+        return true;
+      });
 
-      if (!isValid) return
+      if (!isValid) return;
 
       // Clean up previous preview URLs
-      photoPreviewUrls.value.forEach(url => URL.revokeObjectURL(url))
-
+      photoPreviewUrls.value.forEach(url => URL.revokeObjectURL(url));
+      
       // Update state
-      photos.value = files
-      photoError.value = ''
-
-      // Create and store preview URLs
-      photoPreviewUrls.value = files.map(file => URL.createObjectURL(file))
-    }
+      photos.value = files;
+      photoError.value = '';
+      photoPreviewUrls.value = files.map(file => URL.createObjectURL(file));
+    };
 
     const removePhoto = (index) => {
-      // Revoke the object URL to prevent memory leaks
-      URL.revokeObjectURL(photoPreviewUrls.value[index])
+      // Revoke URL to prevent memory leaks
+      URL.revokeObjectURL(photoPreviewUrls.value[index]);
       
       // Remove photo from arrays
-      photos.value = photos.value.filter((_, i) => i !== index)
-      photoPreviewUrls.value = photoPreviewUrls.value.filter((_, i) => i !== index)
+      photos.value = photos.value.filter((_, i) => i !== index);
+      photoPreviewUrls.value = photoPreviewUrls.value.filter((_, i) => i !== index);
       
-      // Update validation state
+      // Update validation
       if (photos.value.length < 2) {
-        photoError.value = 'Minimum 2 photos required'
+        photoError.value = 'Minimum 2 photos required';
       }
-    }
+    };
 
     const resetForm = () => {
       // Reset form data
       Object.keys(formData).forEach(key => {
         formData[key] = key === 'datePosted' 
           ? new Date().toISOString().split('T')[0] 
-          : ''
-      })
+          : '';
+      });
 
       // Reset file state
-      photos.value.forEach( index => {
-        URL.revokeObjectURL(photoPreviewUrls.value[index])
-      })
-      photos.value = []
-      photoPreviewUrls.value = []
-      photoError.value = ''
+      photoPreviewUrls.value.forEach(url => URL.revokeObjectURL(url));
+      photos.value = [];
+      photoPreviewUrls.value = [];
+      photoError.value = '';
 
       // Reset messages
-      successMessage.value = ''
-      errorMessage.value = ''
-    }
+      successMessage.value = '';
+      errorMessage.value = '';
+    };
 
     const handleSubmit = async () => {
-      if (!isFormValid.value) return
+      if (!isFormValid.value || !validateForm()) return;
 
-      isSubmitting.value = true
-      errorMessage.value = ''
-      successMessage.value = ''
+      isSubmitting.value = true;
+      errorMessage.value = '';
+      successMessage.value = '';
 
       try {
-        const formPayload = new FormData()
+        // Get current token
+        const token = auth.getToken();
+        
+        if (!token) {
+          throw new Error('No authentication token found');
+        }
+
+        const formPayload = new FormData();
 
         // Append form fields
         Object.entries(formData).forEach(([key, value]) => {
-          formPayload.append(key, value)
-        })
+          formPayload.append(key, value.toString().trim());
+        });
 
         // Append photos
         photos.value.forEach(photo => {
-          formPayload.append('photos', photo)
-        })
+          formPayload.append('photos', photo);
+        });
 
-        // Add auth token to request
-        const response = await axios.post('https://rentkenya.onrender.com/api/houses', formPayload, {
+        // Make request with token
+        const response = await api.post('https://rentkenya.onrender.com/api/houses', formPayload, {
           headers: {
             'Content-Type': 'multipart/form-data',
-            'Authorization': `Bearer ${auth.getToken()}`
+            'Authorization': token
           }
-        })
+        });
 
-        successMessage.value = response.data.message || 'House added successfully!'
-        resetForm()
-
+        successMessage.value = response.data.message || 'House added successfully!';
+        
+        // Reset form
+        resetForm();
+        
         // Redirect after success
-        setTimeout(() => router.push('/my-listings'), 2000)
+        setTimeout(() => router.push('/my-listings'), 2000);
 
       } catch (error) {
-        errorMessage.value = error.response?.data?.message || 'Failed to add house'
+        console.error('Submission error:', error);
         
-        // Handle unauthorized error
         if (error.response?.status === 401) {
-          auth.setToken(null)
-          router.push('/login')
+          errorMessage.value = 'Your session has expired. Please log in again.';
+          setTimeout(() => {
+            auth.setToken(null);
+            router.push('/login');
+          }, 2000);
+        } else {
+          errorMessage.value = error.response?.data?.message || 'Failed to add house. Please try again.';
         }
       } finally {
-        isSubmitting.value = false
+        isSubmitting.value = false;
       }
-    }
+    };
 
     return {
-      // State
       formData,
       photos,
       photoPreviewUrls,
@@ -334,19 +372,13 @@ export default {
       isSubmitting,
       successMessage,
       errorMessage,
-
-      // Constants
       houseTypes,
       purposes,
-
-      // Computed
       isFormValid,
-
-      // Methods
       handleFileUpload,
       removePhoto,
       handleSubmit
-    }
+    };
   }
-}
+};
 </script>
