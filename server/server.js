@@ -23,17 +23,24 @@ app.use('/uploads', express.static(uploadDir));
 const uri = process.env.MONGODB_URI;
 const client = new MongoClient(uri, { useUnifiedTopology: true });
 
-// Middleware setup
+// CORS configuration
 const corsOptions = {
-    origin: ['http://localhost:8080', 'https://rent254.onrender.com'],
-    credentials: true,
+    origin: process.env.NODE_ENV === 'production' 
+      ? ['https://rent254.onrender.com'] 
+      : ['http://localhost:8080', 'http://localhost:3000'], 
+    credentials: true, // Required for cookies, authorization headers with HTTPS
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     exposedHeaders: ['Content-Range', 'X-Content-Range'],
-    maxAge: 86400 // 24 hours
-};
+    maxAge: 600 // Preflight results cache time in seconds
+  };
+  
+  // Apply CORS middleware
+  app.use(cors(corsOptions));
+  
+  // Handle preflight requests
+  app.options('*', cors(corsOptions));
 
-app.use(cors(corsOptions));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
