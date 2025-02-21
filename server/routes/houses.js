@@ -6,14 +6,18 @@ const path = require('path');
 
 const router = express.Router();
 
+
 // Configure multer for handling file uploads
 const storage = multer.diskStorage({
     destination: './uploads/',
     filename: (req, file, cb) => {
-        cb(null, `${Date.now()}-${file.originalname}`);
+        // Generate a unique filename using timestamp and random string
+        const uniqueSuffix = `${Date.now()}-${crypto.randomBytes(8).toString('hex')}`;
+        const fileExtension = path.extname(file.originalname).toLowerCase();
+        const sanitizedFileName = `house-${uniqueSuffix}${fileExtension}`;
+        cb(null, sanitizedFileName);
     }
 });
-
 
 const upload = multer({
     storage,
@@ -51,8 +55,15 @@ router.post('/', auth, upload.array('photos', 5), async (req, res) => {
             return res.status(404).json({ message: 'User not found' });
         }
 
-        // Create photo URLs array
-        const photoUrls = req.files.map(file => `/uploads/${file.filename}`);
+        // Create photo metadata array
+        const photos = req.files.map(file => ({
+            filename: file.filename,
+            originalName: file.originalname,
+            path: `/uploads/${file.filename}`,
+            size: file.size,
+            mimeType: file.mimetype,
+            uploadDate: new Date()
+        }));
 
         // Create house document
         const newHouse = {
@@ -61,7 +72,7 @@ router.post('/', auth, upload.array('photos', 5), async (req, res) => {
             datePosted: new Date(datePosted),
             type,
             purpose,
-            photos: photoUrls,
+            photos,
             seller: {
                 id: user._id,
                 name: user.username,
@@ -83,6 +94,63 @@ router.post('/', auth, upload.array('photos', 5), async (req, res) => {
         console.error('Add House Error:', error);
         res.status(500).json({ 
             message: 'Failed to add house', 
+            error: error.message 
+        });
+    }
+});
+
+// Update House
+router.put('/:id', auth, upload.array('photos', 5), async (req, res) => {
+    try {
+        const house = await req.app.locals.houses.findOne({ 
+            _id: new ObjectId(req.params.id) 
+        });
+        
+        if (!house) {
+            return res.status(404).json({ message: 'House not found' });
+        }
+        
+        if (house.seller.id.toString() !== req.user.userId) {
+            return res.status(403).json({ message: 'Not authorized' });
+        }
+
+        const updates = {
+            ...req.body,
+            updatedAt: new Date()
+        };
+
+        // Handle new photos if uploaded
+        if (req.files?.length > 0) {
+            const newPhotos = req.files.map(file => ({
+                filename: file.filename,
+                originalName: file.originalname,
+                path: `/uploads/${file.filename}`,
+                size: file.size,
+                mimeType: file.mimetype,
+                uploadDate: new Date()
+            }));
+
+            // If replacing all photos
+            if (req.body.replaceAllPhotos === 'true') {
+                updates.photos = newPhotos;
+            } else {
+                // Append new photos to existing ones
+                updates.photos = [...(house.photos || []), ...newPhotos];
+            }
+        }
+
+        if (updates.price) updates.price = Number(updates.price);
+        if (updates.datePosted) updates.datePosted = new Date(updates.datePosted);
+
+        await req.app.locals.houses.updateOne(
+            { _id: new ObjectId(req.params.id) },
+            { $set: updates }
+        );
+
+        res.json({ message: 'House updated successfully' });
+    } catch (error) {
+        res.status(500).json({ 
+            message: 'Failed to update house', 
             error: error.message 
         });
     }
