@@ -6,7 +6,7 @@
         <div class="flex-shrink-0">
           <router-link to="/" class="flex items-center">
             <img 
-              src="@/assets/Logo.png"
+              src="/Logo.png"
               alt="RentKenya Logo"
               class="h-8 w-auto mr-2"
               @error="handleLogoError"
