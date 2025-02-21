@@ -128,6 +128,7 @@ import { ref, reactive } from 'vue';
 import { useRouter } from 'vue-router';
 import { AlertCircle as AlertCircleIcon, Eye as EyeIcon, EyeOff as EyeOffIcon } from 'lucide-vue-next';
 import axios from 'axios';
+import { useAuth } from '@/composables/useAuth';
 
 export default {
   name: 'LoginForm',
@@ -140,6 +141,7 @@ export default {
 
   setup() {
     const router = useRouter();
+    const { setToken } = useAuth();
     const error = ref('');
     const isLoading = ref(false);
     const showPassword = ref(false);
@@ -186,12 +188,16 @@ export default {
           throw new Error('No token received from server');
         }
 
-        // Store token and update axios defaults
+        // Create token string with Bearer prefix
         const tokenString = `Bearer ${token}`;
-        localStorage.setItem('token', tokenString);
+        
+        // Update shared auth state
+        setToken(tokenString);
+        
+        // Update axios defaults
         axios.defaults.headers.common['Authorization'] = tokenString;
 
-        // Store remember me preference
+        // Handle remember me preference
         if (form.rememberMe) {
           localStorage.setItem('rememberMe', 'true');
         } else {
