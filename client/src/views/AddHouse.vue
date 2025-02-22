@@ -133,42 +133,10 @@
 </template>
 
 <script>
-import { ref, reactive, computed, watch } from 'vue';
+import { ref, reactive, computed, watch, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuth } from '@/composables/useAuth';
 import axios from 'axios';
-
-// API configuration
-const createApiInstance = () => {
-  const api = axios.create({
-    baseURL: import.meta.env.VITE_API_BASE_URL || 
-      (process.env.NODE_ENV === 'production' ? 'https://rentkenya.onrender.com' : 'http://localhost:5000'),
-    withCredentials: true,
-    headers: { 'Accept': 'application/json' }
-  });
-
-  api.interceptors.request.use(
-    (config) => {
-      const token = localStorage.getItem('token');
-      if (token) config.headers['Authorization'] = `Bearer ${token}`;
-      return config;
-    },
-    (error) => Promise.reject(error)
-  );
-
-  api.interceptors.response.use(
-    (response) => response,
-    (error) => {
-      if (error.response?.status === 401) {
-        localStorage.removeItem('token');
-        window.location.href = '/login';
-      }
-      return Promise.reject(error);
-    }
-  );
-
-  return api;
-};
 
 // Constants
 const HOUSE_TYPES = [
@@ -182,17 +150,6 @@ const HOUSE_TYPES = [
 ];
 
 const PURPOSES = ['Rent', 'Sale'];
-
-const AMENITIES = [
-  'Water',
-  'Electricity',
-  'Security',
-  'Parking',
-  'WiFi',
-  'Balcony',
-  'Garden',
-  'Swimming Pool'
-];
 
 const VALIDATION = {
   PHOTO_MAX_SIZE: 5 * 1024 * 1024, // 5MB
@@ -208,7 +165,14 @@ export default {
   setup() {
     const router = useRouter();
     const auth = useAuth();
-    const api = createApiInstance();
+
+    // Check authentication on mount
+    onMounted(() => {
+      if (!auth.isAuthenticated()) {
+        router.push('/login');
+        return;
+      }
+    });
 
     // State
     const formData = reactive({
@@ -228,6 +192,35 @@ export default {
     const isSubmitting = ref(false);
     const successMessage = ref('');
     const errorMessage = ref('');
+
+    // Create API instance with auth token
+    const api = axios.create({
+      baseURL: process.env.NODE_ENV === 'production' 
+        ? 'https://rentkenya.onrender.com' 
+        : 'http://localhost:5000',
+      withCredentials: true
+    });
+
+    // Add auth token to requests
+    api.interceptors.request.use(config => {
+      const token = auth.getToken();
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+      return config;
+    });
+
+    // Handle auth errors
+    api.interceptors.response.use(
+      response => response,
+      error => {
+        if (error.response?.status === 401) {
+          auth.setToken(null);
+          router.push('/login');
+        }
+        return Promise.reject(error);
+      }
+    );
 
     // Validation functions
     const validators = {
@@ -250,21 +243,6 @@ export default {
             return 'Each file must be less than 5MB';
           }
         }
-
-        return '';
-      },
-
-      form: () => {
-        if (!formData.location.trim()) return 'Location is required';
-        if (!formData.datePosted) return 'Available date is required';
-        if (!formData.type) return 'House type is required';
-        if (!formData.purpose) return 'Purpose is required';
-
-        const priceError = validators.price(formData.price);
-        if (priceError) return priceError;
-
-        const photoError = validators.photos(photos.value);
-        if (photoError) return photoError;
 
         return '';
       }
@@ -308,39 +286,15 @@ export default {
       photoError.value = validators.photos(photos.value);
     };
 
-    // Form handling
-    const resetForm = () => {
-      Object.keys(formData).forEach(key => {
-        formData[key] = key === 'datePosted' ? new Date().toISOString().split('T')[0] :
-                        key === 'amenities' ? [] :
-                        key === 'status' ? 'available' : '';
-      });
-
-      photoPreviewUrls.value.forEach(url => URL.revokeObjectURL(url));
-      photos.value = [];
-      photoPreviewUrls.value = [];
-      photoError.value = '';
-      successMessage.value = '';
-      errorMessage.value = '';
-    };
-
+    // Form submission
     const handleSubmit = async () => {
-      if (!isFormValid.value) return;
-
-      const formError = validators.form();
-      if (formError) {
-        errorMessage.value = formError;
-        return;
-      }
+      if (!isFormValid.value || !auth.isAuthenticated()) return;
 
       isSubmitting.value = true;
       errorMessage.value = '';
       successMessage.value = '';
 
       try {
-        const token = auth.getToken();
-        if (!token) throw new Error('No authentication token found');
-
         const formPayload = new FormData();
 
         // Append form fields
@@ -356,47 +310,27 @@ export default {
         photos.value.forEach(photo => formPayload.append('photos', photo));
 
         const response = await api.post('/api/houses', formPayload, {
-          headers: { 'Content-Type': 'multipart/form-data' },
-          onUploadProgress: (progressEvent) => {
-            const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-            console.log(`Upload Progress: ${percentCompleted}%`);
-          }
+          headers: { 'Content-Type': 'multipart/form-data' }
         });
 
         successMessage.value = response.data.message || 'House added successfully!';
-        resetForm();
         setTimeout(() => router.push('/my-listings'), 2000);
 
       } catch (error) {
         console.error('Submission error:', error);
         
-        if (error.response) {
-          const errorHandlers = {
-            401: () => {
-              errorMessage.value = 'Your session has expired. Please log in again.';
-              setTimeout(() => {
-                auth.setToken(null);
-                router.push('/login');
-              }, 2000);
-            },
-            413: () => errorMessage.value = 'Files are too large. Please reduce photo sizes.',
-            415: () => errorMessage.value = 'Unsupported file type. Please use JPG, JPEG or PNG files.',
-            429: () => errorMessage.value = 'Too many requests. Please try again later.',
-            default: () => errorMessage.value = error.response.data?.message || 'Failed to add house. Please try again.'
-          };
-
-          (errorHandlers[error.response.status] || errorHandlers.default)();
-        } else if (error.request) {
-          errorMessage.value = 'Network error. Please check your connection and try again.';
+        if (error.response?.status === 401) {
+          errorMessage.value = 'Please log in again to continue.';
+          setTimeout(() => router.push('/login'), 2000);
         } else {
-          errorMessage.value = 'An unexpected error occurred. Please try again.';
+          errorMessage.value = error.response?.data?.message || 'Failed to add house. Please try again.';
         }
       } finally {
         isSubmitting.value = false;
       }
     };
 
-    // Watch price changes for real-time validation
+    // Watch price changes
     watch(() => formData.price, (newPrice) => {
       const error = validators.price(newPrice);
       errorMessage.value = error || '';
@@ -412,7 +346,6 @@ export default {
       errorMessage,
       houseTypes: HOUSE_TYPES,
       purposes: PURPOSES,
-      amenitiesList: AMENITIES,
       isFormValid,
       handleFileUpload,
       removePhoto,

@@ -2,13 +2,15 @@ import axios from 'axios';
 import { useAuth } from '@/composables/useAuth';
 
 const baseURL = process.env.NODE_ENV === 'production'
-  | 'https://rentkenya.onrender.com';
+  ? 'https://rentkenya.onrender.com'
+  : 'http://localhost:5000';
 
 const api = axios.create({
   baseURL,
   withCredentials: true,
   headers: {
-    'Content-Type': 'application/json'
+    'Content-Type': 'application/json',
+    'Accept': 'application/json'
   }
 });
 
@@ -19,6 +21,7 @@ api.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    config.withCredentials = true;
     return config;
   },
   error => Promise.reject(error)
@@ -27,35 +30,18 @@ api.interceptors.request.use(
 // Response interceptor
 api.interceptors.response.use(
   response => {
-    // Check for token renewal in response headers
     const newToken = response.headers['x-new-token'];
     if (newToken) {
-      // Update token
-      const { setToken } = useAuth();
-      setToken(newToken);
+      const auth = useAuth();
+      auth.setToken(newToken);
     }
     return response;
   },
   error => {
-    if (error.response) {
-      const { status } = error.response;
-      const { setToken } = useAuth(); 
-      
-      switch (status) {
-        case 401:
-          // Clear token and redirect
-          setToken(null);
-          window.location.href = '/login';
-          break;
-          
-        case 403:
-          console.error('Access denied');
-          break;
-          
-        case 429:
-          console.error('Rate limit exceeded');
-          break;
-      }
+    if (error.response?.status === 401) {
+      const auth = useAuth();
+      auth.setToken(null);
+      window.location.href = '/login';
     }
     return Promise.reject(error);
   }
