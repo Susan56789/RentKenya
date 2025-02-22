@@ -30,7 +30,7 @@ const corsOptions = {
         'https://rent254.onrender.com',
         'https://rentkenya.onrender.com',
         'http://localhost:8080',
-        'http://localhost:3000'
+        'http://localhost:5000'
       ];
       
       // Allow requests with no origin (like mobile apps or curl requests)
