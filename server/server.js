@@ -19,10 +19,10 @@ if (!fs.existsSync(uploadDir)) {
 // Serve uploaded images
 app.use('/uploads', express.static(uploadDir));
 
-// Serve frontend static files from 'dist' (Vue.js build)
+// Serve frontend static files from 'dist' 
 app.use(express.static(path.join(__dirname, 'dist')));
 
-// Fallback route: Serve 'index.html' for non-API requests (Vue Router history mode)
+// Fallback route: Serve 
 app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
