@@ -1,5 +1,5 @@
 import axios from 'axios';
 
 export default axios.create({
-  baseURL: 'http://localhost:5000/api', // Backend URL
+  baseURL: 'https://rentkenya.onrender.com/api', // Backend URL
 });

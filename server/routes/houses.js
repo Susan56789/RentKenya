@@ -3,6 +3,7 @@ const { ObjectId } = require('mongodb');
 const auth = require('../middleware/auth');
 const multer = require('multer');
 const path = require('path');
+const crypto = require('crypto');
 
 const router = express.Router();
 

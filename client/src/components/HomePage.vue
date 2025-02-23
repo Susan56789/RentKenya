@@ -266,7 +266,7 @@
 
 <script>
 export default {
-  name: 'HouseListing',
+  name: 'HomePage',
   
   data() {
     return {
@@ -298,39 +298,17 @@ export default {
   },
 
   computed: {
-    filteredHouses() {
-      return this.houses.filter(house => {
-        const locationMatch = !this.filters.location || 
-          house.location.toLowerCase().includes(this.filters.location.toLowerCase());
-        
-        const minPriceMatch = !this.filters.minPrice || 
-          house.price >= Number(this.filters.minPrice);
-        
-        const maxPriceMatch = !this.filters.maxPrice || 
-          house.price <= Number(this.filters.maxPrice);
-        
-        const typeMatch = !this.filters.type || 
-          house.type === this.filters.type;
-        
-        const purposeMatch = !this.filters.purpose || 
-          house.purpose === this.filters.purpose;
-
-        return locationMatch && minPriceMatch && maxPriceMatch && 
-               typeMatch && purposeMatch;
-      });
-    },
-
     paginatedHouses() {
       const start = (this.currentPage - 1) * this.perPage;
-      return this.filteredHouses.slice(start, start + this.perPage);
+      return this.houses.slice(start, start + this.perPage);
     },
 
     totalPages() {
-      return Math.ceil(this.filteredHouses.length / this.perPage);
+      return Math.ceil(this.houses.length / this.perPage);
     },
 
     totalHouses() {
-      return this.filteredHouses.length;
+      return this.houses.length;
     },
 
     hasActiveFilters() {
@@ -375,7 +353,27 @@ export default {
       this.error = null;
       
       try {
-        const response = await fetch(`${this.apiBaseUrl}/api/houses`);
+        const queryParams = new URLSearchParams();
+        
+        if (this.filters.location) {
+          queryParams.append('location', this.filters.location);
+        }
+        if (this.filters.minPrice) {
+          queryParams.append('minPrice', this.filters.minPrice);
+        }
+        if (this.filters.maxPrice) {
+          queryParams.append('maxPrice', this.filters.maxPrice);
+        }
+        if (this.filters.type) {
+          queryParams.append('type', this.filters.type);
+        }
+        if (this.filters.purpose) {
+          queryParams.append('purpose', this.filters.purpose);
+        }
+
+        const url = `${this.apiBaseUrl}/api/houses${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+        
+        const response = await fetch(url);
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
@@ -383,12 +381,20 @@ export default {
         const data = await response.json();
         this.houses = Array.isArray(data) ? data : [];
         
-        // Initialize carousel for each house
+        // Initialize carousel for new houses
         this.houses.forEach(house => {
           if (!this.carouselIndices[house._id]) {
             this.carouselIndices[house._id] = 0;
+            this.startCarouselInterval(house._id);
           }
-          this.startCarouselInterval(house._id);
+        });
+
+        // Cleanup carousel indices
+        Object.keys(this.carouselIndices).forEach(houseId => {
+          if (!this.houses.find(h => h._id === houseId)) {
+            delete this.carouselIndices[houseId];
+            this.stopCarouselInterval(houseId);
+          }
         });
       } catch (err) {
         this.error = 'Failed to load houses. Please try again later.';
@@ -398,9 +404,7 @@ export default {
       }
     },
 
-    // Carousel Methods
     startCarouselInterval(houseId) {
-      // Clear existing interval if any
       if (this.carouselIntervals[houseId]) {
         clearInterval(this.carouselIntervals[houseId]);
       }
@@ -438,13 +442,12 @@ export default {
 
     setImage(houseId, index) {
       this.carouselIndices[houseId] = index;
-      this.startCarouselInterval(houseId); // Reset interval
+      this.startCarouselInterval(houseId);
     },
 
-    // Image Handling
     getPhotoUrl(photo) {
       try {
-        if (!photo) return '/placeholder-house.jpg';
+        if (!photo) return '/placeholder-house.png';
         
         if (typeof photo === 'string') {
           return photo.startsWith('http') ? photo : `${this.apiBaseUrl}${photo}`;
@@ -454,24 +457,21 @@ export default {
           return photo.path.startsWith('http') ? photo.path : `${this.apiBaseUrl}${photo.path}`;
         }
         
-        return '/placeholder-house.jpg';
+        return '/placeholder-house.png';
       } catch (error) {
         console.error('Error processing photo URL:', error);
-        return '/placeholder-house.jpg';
+        return '/placeholder-house.png';
       }
     },
 
     handleImageError(event, houseId, photoIndex) {
-      event.target.src = '/placeholder-house.jpg';
+      event.target.src = '/placeholder-house.png';
       console.warn(`Failed to load image for house ${houseId}, photo index ${photoIndex}`);
     },
 
-    // Filter Methods
     handleFilterChange() {
-      // Reset to first page when filters change
       this.currentPage = 1;
       
-      // Validate price inputs
       if (this.filters.minPrice && this.filters.maxPrice) {
         if (Number(this.filters.minPrice) > Number(this.filters.maxPrice)) {
           const temp = this.filters.minPrice;
@@ -480,13 +480,12 @@ export default {
         }
       }
       
-      // Debounce API call if needed
       this.debouncedFetchHouses();
     },
 
     clearFilter(filterName) {
       this.filters[filterName] = '';
-      this.handleFilterChange();
+      this.fetchHouses();
     },
 
     resetFilters() {
@@ -498,9 +497,9 @@ export default {
         purpose: ''
       };
       this.currentPage = 1;
+      this.fetchHouses();
     },
 
-    // Pagination Methods
     goToPage(page) {
       if (typeof page === 'number' && page !== this.currentPage) {
         this.currentPage = page;
@@ -520,7 +519,6 @@ export default {
       }
     },
 
-    // Utility Methods
     formatPrice(price) {
       return new Intl.NumberFormat('en-KE').format(price);
     },
@@ -529,7 +527,6 @@ export default {
       this.$router.push(`/house/${houseId}`);
     },
 
-    // Debounce helper
     debounce(fn, delay) {
       let timeoutId;
       return function (...args) {
@@ -540,8 +537,9 @@ export default {
   },
 
   created() {
-    // Create debounced version of fetchHouses
-    this.debouncedFetchHouses = this.debounce(this.fetchHouses, 300);
+    this.debouncedFetchHouses = this.debounce(() => {
+      this.fetchHouses();
+    }, 300);
   },
 
   mounted() {
@@ -549,19 +547,26 @@ export default {
   },
 
   beforeUnmount() {
-    // Clear all carousel intervals
     Object.keys(this.carouselIntervals).forEach(houseId => {
       this.stopCarouselInterval(houseId);
     });
   },
 
   watch: {
-    // Reset page when filters change
-    filters: {
-      deep: true,
-      handler() {
-        this.currentPage = 1;
-      }
+    'filters.location'(newVal, oldVal) {
+      if (newVal !== oldVal) this.handleFilterChange();
+    },
+    'filters.minPrice'(newVal, oldVal) {
+      if (newVal !== oldVal) this.handleFilterChange();
+    },
+    'filters.maxPrice'(newVal, oldVal) {
+      if (newVal !== oldVal) this.handleFilterChange();
+    },
+    'filters.type'(newVal, oldVal) {
+      if (newVal !== oldVal) this.handleFilterChange();
+    },
+    'filters.purpose'(newVal, oldVal) {
+      if (newVal !== oldVal) this.handleFilterChange();
     }
   }
 };

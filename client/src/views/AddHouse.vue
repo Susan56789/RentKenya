@@ -1,4 +1,3 @@
-# AddHouse.vue
 <template>
   <div class="max-w-xl mx-auto p-6 bg-white shadow-lg rounded-lg">
     <h2 class="text-2xl font-bold mb-6">Add New House</h2>
@@ -81,10 +80,11 @@
         </label>
         <input 
           id="photos"
+          ref="fileInput"
           type="file"
           @change="handleFileUpload"
           multiple
-          accept="image/jpeg,image/jpg,image/png"
+          accept=".jpg,.jpeg,.png"
           class="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-gray-500 focus:border-gray-500"
         />
         
@@ -117,7 +117,16 @@
         :disabled="isSubmitting || !isFormValid"
         class="w-full bg-gray-600 text-white py-2 px-4 rounded-md hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        {{ isSubmitting ? 'Adding...' : 'Add House' }}
+        <template v-if="isSubmitting">
+          <span class="flex items-center justify-center">
+            <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            Adding House...
+          </span>
+        </template>
+        <span v-else>Add House</span>
       </button>
 
       <!-- Status Messages -->
@@ -133,7 +142,7 @@
 </template>
 
 <script>
-import { ref, reactive, computed, watch, onMounted } from 'vue';
+import { ref, reactive, computed, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuth } from '@/composables/useAuth';
 import axios from 'axios';
@@ -155,8 +164,7 @@ const VALIDATION = {
   PHOTO_MAX_SIZE: 5 * 1024 * 1024, // 5MB
   VALID_PHOTO_TYPES: ['image/jpeg', 'image/jpg', 'image/png'],
   MIN_PHOTOS: 2,
-  MAX_PHOTOS: 5,
-  MAX_PRICE: 1000000000 // 1 billion KES
+  MAX_PHOTOS: 5
 };
 
 export default {
@@ -165,15 +173,8 @@ export default {
   setup() {
     const router = useRouter();
     const auth = useAuth();
-
-    // Check authentication on mount
-    onMounted(() => {
-      if (!auth.isAuthenticated()) {
-        router.push('/login');
-        return;
-      }
-    });
-
+    const fileInput = ref(null);
+    
     // State
     const formData = reactive({
       location: '',
@@ -181,9 +182,6 @@ export default {
       datePosted: new Date().toISOString().split('T')[0],
       type: '',
       purpose: '',
-      description: '',
-      amenities: [],
-      status: 'available'
     });
 
     const photos = ref([]);
@@ -193,62 +191,81 @@ export default {
     const successMessage = ref('');
     const errorMessage = ref('');
 
-    // Create API instance with auth token
+    // Create API instance
     const api = axios.create({
       baseURL: process.env.NODE_ENV === 'production' 
         ? 'https://rentkenya.onrender.com' 
-        : 'http://localhost:5000',
-      withCredentials: true
+        : 'http://localhost:5000'
     });
 
     // Add auth token to requests
     api.interceptors.request.use(config => {
       const token = auth.getToken();
-      if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
+      if (!token) {
+        throw new Error('No authentication token found');
       }
+      config.headers.Authorization = token;
       return config;
     });
 
-    // Handle auth errors
-    api.interceptors.response.use(
-      response => response,
-      error => {
-        if (error.response?.status === 401) {
-          auth.setToken(null);
-          router.push('/login');
-        }
-        return Promise.reject(error);
+    // File validation
+    const validateFile = (file) => {
+      if (!VALIDATION.VALID_PHOTO_TYPES.includes(file.type)) {
+        return 'Only JPG, JPEG and PNG files allowed';
       }
-    );
-
-    // Validation functions
-    const validators = {
-      price: (price) => {
-        const numPrice = Number(price);
-        if (isNaN(numPrice) || numPrice <= 0) return 'Price must be a positive number';
-        if (numPrice > VALIDATION.MAX_PRICE) return 'Price is too high';
-        return '';
-      },
-
-      photos: (files) => {
-        if (!files || files.length < VALIDATION.MIN_PHOTOS) return 'Minimum 2 photos required';
-        if (files.length > VALIDATION.MAX_PHOTOS) return 'Maximum 5 photos allowed';
-
-        for (const file of files) {
-          if (!VALIDATION.VALID_PHOTO_TYPES.includes(file.type)) {
-            return 'Only JPG, JPEG and PNG files allowed';
-          }
-          if (file.size > VALIDATION.PHOTO_MAX_SIZE) {
-            return 'Each file must be less than 5MB';
-          }
-        }
-
-        return '';
+      if (file.size > VALIDATION.PHOTO_MAX_SIZE) {
+        return `${file.name} is too large. Maximum size is 5MB`;
       }
+      return null;
     };
 
-    // Computed properties
+    // File handling
+    const handleFileUpload = (event) => {
+      const files = Array.from(event.target.files || []);
+      
+      if (files.length < VALIDATION.MIN_PHOTOS) {
+        photoError.value = 'Minimum 2 photos required';
+        return;
+      }
+
+      if (files.length > VALIDATION.MAX_PHOTOS) {
+        photoError.value = 'Maximum 5 photos allowed';
+        return;
+      }
+
+      // Validate each file
+      for (const file of files) {
+        const error = validateFile(file);
+        if (error) {
+          photoError.value = error;
+          event.target.value = '';
+          return;
+        }
+      }
+
+      // Clear previous previews
+      photoPreviewUrls.value.forEach(url => URL.revokeObjectURL(url));
+      
+      // Update state
+      photos.value = files;
+      photoError.value = '';
+      photoPreviewUrls.value = files.map(file => URL.createObjectURL(file));
+    };
+
+    const removePhoto = (index) => {
+      URL.revokeObjectURL(photoPreviewUrls.value[index]);
+      photos.value = photos.value.filter((_, i) => i !== index);
+      photoPreviewUrls.value = photoPreviewUrls.value.filter((_, i) => i !== index);
+      
+      // Reset file input if all photos are removed
+      if (photos.value.length === 0 && fileInput.value) {
+        fileInput.value.value = '';
+      }
+      
+      photoError.value = photos.value.length < VALIDATION.MIN_PHOTOS ? 'Minimum 2 photos required' : '';
+    };
+
+    // Form validation
     const isFormValid = computed(() => {
       return (
         formData.location.trim() &&
@@ -262,33 +279,9 @@ export default {
       );
     });
 
-    // File handling
-    const handleFileUpload = (event) => {
-      const files = Array.from(event.target.files || []);
-      const error = validators.photos(files);
-      
-      if (error) {
-        photoError.value = error;
-        event.target.value = '';
-        return;
-      }
-
-      photoPreviewUrls.value.forEach(url => URL.revokeObjectURL(url));
-      photos.value = files;
-      photoError.value = '';
-      photoPreviewUrls.value = files.map(file => URL.createObjectURL(file));
-    };
-
-    const removePhoto = (index) => {
-      URL.revokeObjectURL(photoPreviewUrls.value[index]);
-      photos.value = photos.value.filter((_, i) => i !== index);
-      photoPreviewUrls.value = photoPreviewUrls.value.filter((_, i) => i !== index);
-      photoError.value = validators.photos(photos.value);
-    };
-
     // Form submission
     const handleSubmit = async () => {
-      if (!isFormValid.value || !auth.isAuthenticated()) return;
+      if (!isFormValid.value) return;
 
       isSubmitting.value = true;
       errorMessage.value = '';
@@ -299,29 +292,38 @@ export default {
 
         // Append form fields
         Object.entries(formData).forEach(([key, value]) => {
-          if (Array.isArray(value)) {
-            value.forEach(item => formPayload.append(`${key}[]`, item));
-          } else {
-            formPayload.append(key, value.toString().trim());
-          }
+          formPayload.append(key, value.toString().trim());
         });
 
-        // Append photos
-        photos.value.forEach(photo => formPayload.append('photos', photo));
+        // Append photos with the correct field name
+        photos.value.forEach(photo => {
+          formPayload.append('photos', photo);
+        });
 
         const response = await api.post('/api/houses', formPayload, {
           headers: { 'Content-Type': 'multipart/form-data' }
         });
 
         successMessage.value = response.data.message || 'House added successfully!';
+        
+        // Clear form after successful submission
+        formData.location = '';
+        formData.price = '';
+        formData.type = '';
+        formData.purpose = '';
+        photos.value = [];
+        photoPreviewUrls.value.forEach(url => URL.revokeObjectURL(url));
+        photoPreviewUrls.value = [];
+        if (fileInput.value) fileInput.value.value = '';
+
+        // Navigate after a short delay
         setTimeout(() => router.push('/my-listings'), 2000);
 
       } catch (error) {
         console.error('Submission error:', error);
         
-        if (error.response?.status === 401) {
-          errorMessage.value = 'Please log in again to continue.';
-          setTimeout(() => router.push('/login'), 2000);
+        if (error.message === 'No authentication token found') {
+          router.push('/login');
         } else {
           errorMessage.value = error.response?.data?.message || 'Failed to add house. Please try again.';
         }
@@ -330,10 +332,15 @@ export default {
       }
     };
 
-    // Watch price changes
+    // Price validation
     watch(() => formData.price, (newPrice) => {
-      const error = validators.price(newPrice);
-      errorMessage.value = error || '';
+      if (newPrice < 0) {
+        errorMessage.value = 'Price cannot be negative';
+      } else if (newPrice > 1000000000) {
+        errorMessage.value = 'Price is too high';
+      } else {
+        errorMessage.value = '';
+      }
     });
 
     return {
@@ -344,6 +351,7 @@ export default {
       isSubmitting,
       successMessage,
       errorMessage,
+      fileInput,
       houseTypes: HOUSE_TYPES,
       purposes: PURPOSES,
       isFormValid,
