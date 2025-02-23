@@ -112,7 +112,7 @@ const router = createRouter({
 // Navigation guards
 router.beforeEach((to, from, next) => {
   // Update document title
-  document.title = `${to.meta.title} - Your Site Name` || 'Your Site Name';
+  document.title = `${to.meta.title} - RentKenya` || 'RentKenya';
   
   // Check if authentication is required
   const isAuthenticated = localStorage.getItem('token'); // Replace with your auth check
