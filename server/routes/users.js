@@ -347,4 +347,72 @@ router.post('/change-password', auth, async (req, res) => {
     }
 });
 
+
+// Get User Profile
+router.get('/profile', auth, async (req, res) => {
+    try {
+        const user = await req.app.locals.users.findOne(
+            { _id: new ObjectId(req.user.userId) },
+            { projection: { password: 0 } } // Exclude password from response
+        );
+
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        res.json(user);
+    } catch (error) {
+        console.error('Get Profile Error:', error);
+        res.status(500).json({ message: 'Error fetching user profile' });
+    }
+});
+
+// Update User Profile
+router.put('/profile', auth, async (req, res) => {
+    try {
+        const { username, phoneNumber, location, bio } = req.body;
+
+        // Validate required fields
+        if (!username?.trim()) {
+            return res.status(400).json({ message: 'Username is required' });
+        }
+
+        // Check if username is already taken by another user
+        const existingUser = await req.app.locals.users.findOne({
+            _id: { $ne: new ObjectId(req.user.userId) },
+            username: username.trim()
+        });
+
+        if (existingUser) {
+            return res.status(409).json({ message: 'Username is already taken' });
+        }
+
+        const updates = {
+            username: username.trim(),
+            phoneNumber: phoneNumber?.trim() || '',
+            location: location?.trim() || '',
+            bio: bio?.trim() || '',
+            updatedAt: new Date()
+        };
+
+        const result = await req.app.locals.users.updateOne(
+            { _id: new ObjectId(req.user.userId) },
+            { $set: updates }
+        );
+
+        if (!result.matchedCount) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        res.json({ 
+            message: 'Profile updated successfully',
+            user: updates
+        });
+
+    } catch (error) {
+        console.error('Update Profile Error:', error);
+        res.status(500).json({ message: 'Error updating user profile' });
+    }
+});
+
 module.exports = router;
