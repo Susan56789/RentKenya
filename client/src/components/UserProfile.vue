@@ -174,10 +174,11 @@
 </template>
 
 <script>
-import { ref, reactive } from 'vue';
+import { ref, reactive,computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuth } from '@/composables/useAuth';
 import axios from 'axios';
+
 
 export default {
   name: 'UserProfile',
@@ -348,14 +349,15 @@ export default {
       }
     };
 
-    // Computed property for user initials
-    const userInitials = () => {
-      return userData.username
-        .split(' ')
-        .map(name => name[0])
-        .join('')
-        .toUpperCase();
-    };
+    const userInitials = computed(() => {
+  if (!userData.username) return "";
+  return userData.username
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase();
+});
+
 
     // Fetch profile data on component mount
     fetchUserProfile();
