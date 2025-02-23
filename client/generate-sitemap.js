@@ -1,14 +1,13 @@
-const fs = require('fs');
+const fs = require('fs').promises;
 const path = require('path');
 const axios = require('axios');
+const { format } = require('date-fns');
 
 // Configuration
 const config = {
-  
   siteUrl: 'https://rent254.onrender.com',
-  
   apiUrl: 'https://rentkenya.onrender.com/api/houses',
-  
+  outputDir: path.join(process.cwd(), 'public'),
   staticRoutes: [
     {
       url: '/',
@@ -38,99 +37,124 @@ const config = {
       priority: 0.4,
       noindex: true
     }
-   
   ]
 };
 
-// Fetch house listings from API
-async function fetchHouseListings() {
-  try {
-    const response = await axios.get(config.apiUrl);
-    return response.data;
-  } catch (error) {
-    console.error('Error fetching house listings:', error);
-    return [];
+class SitemapGenerator {
+  constructor(config) {
+    this.config = config;
+    this.xmlUrls = [];
   }
-}
 
-// Generate house URLs from listings
-async function getHouseUrls() {
-  const houses = await fetchHouseListings();
-  return houses.map(house => ({
-    url: `/house/${house._id}`,
-    changefreq: 'daily',
-    priority: 0.9,
-    lastmod: house.updatedAt || new Date().toISOString()
-  }));
-}
+  formatDate(date) {
+    return format(new Date(date), "yyyy-MM-dd'T'HH:mm:ssxxx");
+  }
 
-// Generate robots.txt content
-function generateRobotsTxt(sitemapUrl) {
-  return `User-agent: *
+  async ensureOutputDir() {
+    try {
+      await fs.access(this.config.outputDir);
+    } catch {
+      await fs.mkdir(this.config.outputDir, { recursive: true });
+    }
+  }
+
+  async fetchHouseListings() {
+    try {
+      const response = await axios.get(this.config.apiUrl, {
+        timeout: 10000,
+        headers: {
+          'Accept': 'application/json'
+        }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching house listings:', error.message);
+      if (error.response) {
+        console.error('API Response:', error.response.data);
+      }
+      return [];
+    }
+  }
+
+  addUrl({ url, changefreq, priority, lastmod }) {
+    const fullUrl = new URL(url, this.config.siteUrl).toString();
+    this.xmlUrls.push(
+      '  <url>\n' +
+      `    <loc>${fullUrl}</loc>\n` +
+      `    <lastmod>${this.formatDate(lastmod || new Date())}</loc>\n` +
+      `    <changefreq>${changefreq}</changefreq>\n` +
+      `    <priority>${priority.toFixed(1)}</priority>\n` +
+      '  </url>'
+    );
+  }
+
+  generateRobotsTxt() {
+    const noindexRoutes = this.config.staticRoutes
+      .filter(route => route.noindex)
+      .map(route => `Disallow: ${route.url}`)
+      .join('\n');
+
+    return `User-agent: *
 Allow: /
-Disallow: /login
-Disallow: /register
-Disallow: /forgot-password
+${noindexRoutes}
 Disallow: /profile
 Disallow: /my-listings
-Sitemap: ${sitemapUrl}/sitemap.xml`;
-}
 
-// Generate sitemap XML content
-async function generateSitemap() {
-  let xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
-  xml += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n';
+# Sitemap
+Sitemap: ${new URL('sitemap.xml', this.config.siteUrl).toString()}`;
+  }
 
-  // Add static routes (excluding noindex routes)
-  config.staticRoutes
-    .filter(route => !route.noindex)
-    .forEach(route => {
-      xml += '  <url>\n';
-      xml += `    <loc>${config.siteUrl}${route.url}</loc>\n`;
-      xml += `    <changefreq>${route.changefreq}</changefreq>\n`;
-      xml += `    <priority>${route.priority}</priority>\n`;
-      xml += `    <lastmod>${new Date().toISOString()}</lastmod>\n`;
-      xml += '  </url>\n';
-    });
+  generateSitemapXml() {
+    return '<?xml version="1.0" encoding="UTF-8"?>\n' +
+           '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"\n' +
+           '        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"\n' +
+           '        xsi:schemaLocation="http://www.sitemaps.org/schemas/sitemap/0.9\n' +
+           '        http://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd">\n' +
+           this.xmlUrls.join('\n') +
+           '\n</urlset>';
+  }
 
-  // Add dynamic house listings
-  const houseUrls = await getHouseUrls();
-  houseUrls.forEach(route => {
-    xml += '  <url>\n';
-    xml += `    <loc>${config.siteUrl}${route.url}</loc>\n`;
-    xml += `    <changefreq>${route.changefreq}</changefreq>\n`;
-    xml += `    <priority>${route.priority}</priority>\n`;
-    xml += `    <lastmod>${route.lastmod}</lastmod>\n`;
-    xml += '  </url>\n';
-  });
+  async generate() {
+    try {
+      await this.ensureOutputDir();
 
-  xml += '</urlset>';
-  return xml;
-}
+      // Add static routes (excluding noindex)
+      this.config.staticRoutes
+        .filter(route => !route.noindex)
+        .forEach(route => this.addUrl(route));
 
-// Write sitemap and robots.txt files
-async function generateSEOFiles() {
-  try {
-    const publicDir = path.join(__dirname, 'public');
-    
-    // Create public directory if it doesn't exist
-    if (!fs.existsSync(publicDir)) {
-      fs.mkdirSync(publicDir);
+      // Add dynamic house listings
+      const houses = await this.fetchHouseListings();
+      houses.forEach(house => {
+        this.addUrl({
+          url: `/house/${house._id}`,
+          changefreq: 'daily',
+          priority: 0.9,
+          lastmod: house.updatedAt
+        });
+      });
+
+      // Write sitemap.xml
+      const sitemapPath = path.join(this.config.outputDir, 'sitemap.xml');
+      await fs.writeFile(sitemapPath, this.generateSitemapXml());
+
+      // Write robots.txt
+      const robotsPath = path.join(this.config.outputDir, 'robots.txt');
+      await fs.writeFile(robotsPath, this.generateRobotsTxt());
+
+      console.log('✓ Generated sitemap.xml:', sitemapPath);
+      console.log('✓ Generated robots.txt:', robotsPath);
+      console.log(`✓ Total URLs in sitemap: ${this.xmlUrls.length}`);
+    } catch (error) {
+      console.error('Error generating SEO files:', error);
+      throw error;
     }
-
-    // Generate and write sitemap.xml
-    const sitemap = await generateSitemap();
-    fs.writeFileSync(path.join(publicDir, 'sitemap.xml'), sitemap);
-
-    // Generate and write robots.txt
-    const robotsTxt = generateRobotsTxt(config.siteUrl);
-    fs.writeFileSync(path.join(publicDir, 'robots.txt'), robotsTxt);
-    
-    console.log('Sitemap and robots.txt generated successfully!');
-  } catch (error) {
-    console.error('Error generating SEO files:', error);
   }
 }
 
 // Execute the generation
-generateSEOFiles();
+const generator = new SitemapGenerator(config);
+generator.generate().catch(error => {
+  console.error('Failed to generate SEO files:', error);
+  process.exit(1);
+});

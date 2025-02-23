@@ -1,15 +1,24 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.sitemaps.org/schemas/sitemap/0.9
+        http://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd">
   <url>
     <loc>https://rent254.onrender.com/</loc>
+    <lastmod>2025-02-23T10:57:48+03:00</loc>
     <changefreq>daily</changefreq>
-    <priority>1</priority>
-    <lastmod>2025-02-21T14:13:36.567Z</lastmod>
+    <priority>1.0</priority>
   </url>
   <url>
     <loc>https://rent254.onrender.com/add-house</loc>
+    <lastmod>2025-02-23T10:57:48+03:00</loc>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
-    <lastmod>2025-02-21T14:13:36.569Z</lastmod>
+  </url>
+  <url>
+    <loc>https://rent254.onrender.com/house/67bac92ee40a685d4b074087</loc>
+    <lastmod>2025-02-23T10:57:50+03:00</loc>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
   </url>
 </urlset>
