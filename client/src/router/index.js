@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import HomePage from '../components/HomePage.vue';
 import AddHouse from '../views/AddHouse.vue';
+import EditHouse from '../views/EditHouse.vue';
 import LoginPage from '../views/LoginPage.vue';
 import RegisterPage from '../views/RegisterPage.vue';
 import HouseDetails from '../views/HouseDetails.vue';
@@ -24,6 +25,16 @@ const routes = [
     meta: {
       requiresAuth: true,
       title: 'Add New House'
+    }
+  },
+  {
+    path: '/edit-house/:id',
+    name: 'EditHouse',
+    component: EditHouse,
+    props: true,
+    meta: {
+      requiresAuth: true,
+      title: 'Edit House'
     }
   },
   {
