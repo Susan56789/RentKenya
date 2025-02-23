@@ -2,7 +2,7 @@
   <div class="min-h-screen bg-gray-50 p-6">
     <!-- Loading State -->
     <div v-if="loading" class="flex flex-col items-center justify-center min-h-[60vh]">
-      <div class="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-blue-500"></div>
+      <div class="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-gray-500"></div>
       <p class="mt-4 text-gray-600 text-lg">Loading houses...</p>
     </div>
 
@@ -28,7 +28,7 @@
               v-model="filters.location"
               @input="handleFilterChange" 
               placeholder="Search location..." 
-              class="w-full px-4 py-2 rounded-md border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              class="w-full px-4 py-2 rounded-md border border-gray-300 focus:ring-2 focus:ring-gray-500 focus:border-transparent"
             />
             <button 
               v-if="filters.location"
@@ -46,7 +46,7 @@
               type="number" 
               min="0"
               placeholder="Min Price (KES)" 
-              class="w-full px-4 py-2 rounded-md border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              class="w-full px-4 py-2 rounded-md border border-gray-300 focus:ring-2 focus:ring-gray-500 focus:border-transparent"
             />
             <button 
               v-if="filters.minPrice"
@@ -64,7 +64,7 @@
               type="number"
               min="0"
               placeholder="Max Price (KES)" 
-              class="w-full px-4 py-2 rounded-md border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              class="w-full px-4 py-2 rounded-md border border-gray-300 focus:ring-2 focus:ring-gray-500 focus:border-transparent"
             />
             <button 
               v-if="filters.maxPrice"
@@ -78,7 +78,7 @@
           <select 
             v-model="filters.type"
             @change="handleFilterChange"
-            class="w-full px-4 py-2 rounded-md border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            class="w-full px-4 py-2 rounded-md border border-gray-300 focus:ring-2 focus:ring-gray-500 focus:border-transparent"
           >
             <option value="">All Types</option>
             <option v-for="type in houseTypes" :key="type" :value="type">
@@ -89,7 +89,7 @@
           <select 
             v-model="filters.purpose"
             @change="handleFilterChange"
-            class="w-full px-4 py-2 rounded-md border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            class="w-full px-4 py-2 rounded-md border border-gray-300 focus:ring-2 focus:ring-gray-500 focus:border-transparent"
           >
             <option value="">All Purposes</option>
             <option value="Rent">Rent</option>
@@ -173,7 +173,7 @@
               <h3 class="text-lg font-semibold text-gray-900">{{ house.type }}</h3>
               <span 
                 class="px-2 py-1 text-sm rounded-full"
-                :class="house.purpose === 'Rent' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'"
+                :class="house.purpose === 'Rent' ? 'bg-gray-100 text-gray-800' : 'bg-green-100 text-green-800'"
               >
                 {{ house.purpose }}
               </span>
@@ -196,7 +196,7 @@
                 {{ house.status }}
               </span>
               <button 
-                class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-sm"
+                class="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors text-sm"
                 @click="viewDetails(house._id)"
               >
                 View Details
@@ -217,7 +217,7 @@
         <button 
           v-if="hasActiveFilters && !loading"
           @click="resetFilters"
-          class="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+          class="mt-4 px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors"
         >
           Clear Filters
         </button>
@@ -244,7 +244,7 @@
             :class="[
               'px-3 py-1 rounded-md',
               currentPage === page 
-                ? 'bg-blue-600 text-white' 
+                ? 'bg-gray-600 text-white' 
                 : 'bg-gray-100 hover:bg-gray-200'
             ]"
           >
@@ -446,23 +446,27 @@ export default {
     },
 
     getPhotoUrl(photo) {
-      try {
-        if (!photo) return '/placeholder-house.png';
-        
-        if (typeof photo === 'string') {
-          return photo.startsWith('http') ? photo : `${this.apiBaseUrl}${photo}`;
-        }
-        
-        if (photo.path) {
-          return photo.path.startsWith('http') ? photo.path : `${this.apiBaseUrl}${photo.path}`;
-        }
-        
-        return '/placeholder-house.png';
-      } catch (error) {
-        console.error('Error processing photo URL:', error);
-        return '/placeholder-house.png';
-      }
-    },
+  try {
+    if (!photo) return '/placeholder-house.png';
+    
+    // Handle the database photo object structure
+    if (photo.path) {
+      
+      // Need to prepend the API base URL
+      return `${this.apiBaseUrl}${photo.path}`;
+    }
+    
+    // Fallback for direct string paths 
+    if (typeof photo === 'string') {
+      return photo.startsWith('http') ? photo : `${this.apiBaseUrl}${photo}`;
+    }
+    
+    return '/placeholder-house.png';
+  } catch (error) {
+    console.error('Error processing photo URL:', error);
+    return '/placeholder-house.png';
+  }
+},
 
     handleImageError(event, houseId, photoIndex) {
       event.target.src = '/placeholder-house.png';
