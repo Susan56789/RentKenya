@@ -72,8 +72,8 @@
             d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
           />
         </svg>
-        <h3 class="mt-2 text-sm font-medium text-gray-900">No listings found</h3>
-        <p class="mt-1 text-sm text-gray-500">Start by creating your first listing</p>
+        <h3 class="mt-2 text-sm font-medium text-gray-900">You haven't posted any houses yet</h3>
+        <p class="mt-1 text-sm text-gray-500">Start by adding your first property listing</p>
         <div class="mt-6">
           <router-link
             to="/add-house"
@@ -91,7 +91,7 @@
                 clip-rule="evenodd"
               />
             </svg>
-            Add New Listing
+            Add Your First Listing
           </router-link>
         </div>
       </div>
@@ -112,7 +112,22 @@
               @error="handleImageError"
             />
             <!-- Image Navigation -->
-            <div v-if="listing.photos.length > 1" class="absolute bottom-2 right-2 flex space-x-1">
+            <div v-if="listing.photos.length > 1" class="absolute inset-0 flex items-center justify-between">
+              <button 
+                @click="prevPhoto(listing._id)"
+                class="p-1 bg-black bg-opacity-50 text-white rounded-r hover:bg-opacity-75"
+              >
+                &lt;
+              </button>
+              <button 
+                @click="nextPhoto(listing._id)"
+                class="p-1 bg-black bg-opacity-50 text-white rounded-l hover:bg-opacity-75"
+              >
+                &gt;
+              </button>
+            </div>
+            <!-- Image Dots -->
+            <div v-if="listing.photos.length > 1" class="absolute bottom-2 left-0 right-0 flex justify-center space-x-1">
               <button
                 v-for="(photo, index) in listing.photos"
                 :key="index"
@@ -153,13 +168,33 @@
               <p>KSh {{ formatPrice(listing.price) }}/{{ listing.purpose === 'Rent' ? 'month' : '' }}</p>
             </div>
 
+            <div class="mt-2 flex items-center justify-between text-sm text-gray-500">
+              <div class="flex items-center">
+                <svg
+                  class="flex-shrink-0 mr-1.5 h-5 w-5 text-gray-400"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                  />
+                </svg>
+                <p>Posted by: {{ listing.seller.name }}</p>
+              </div>
+            </div>
+
             <div class="mt-2 text-sm text-gray-500">
+              <p>Contact: {{ listing.seller.phone }}</p>
               <p>Posted: {{ formatDate(listing.datePosted) }}</p>
             </div>
 
             <div class="mt-4 flex justify-end space-x-3">
-              <button
-                @click="editListing(listing._id)"
+              <router-link
+                :to="`/edit-house/${listing._id}`"
                 class="px-3 py-1 text-sm text-gray-600 hover:text-gray-800 flex items-center"
               >
                 <svg
@@ -176,7 +211,7 @@
                   />
                 </svg>
                 Edit
-              </button>
+              </router-link>
               <button
                 @click="confirmDelete(listing._id)"
                 class="px-3 py-1 text-sm text-red-600 hover:text-red-800 flex items-center"
@@ -254,138 +289,137 @@
 </template>
 
 <script>
+
+import { ref, reactive } from 'vue';
+import { useRouter } from 'vue-router';
+import { useAuth } from '@/composables/useAuth';
 import axios from 'axios';
 
 export default {
   name: 'HouseListings',
-  
-  data() {
-    return {
-      listings: [],
-      isLoading: true,
-      error: null,
-      showDeleteModal: false,
-      selectedListingId: null,
-      isDeleting: false,
-      currentPhotoIndex: {},
-      filters: {
-        type: '',
-        purpose: ''
-      },
-      apiBaseUrl: process.env.NODE_ENV === 'production' 
-        ? 'https://rentkenya.onrender.com'
-        : 'http://localhost:5000'
-    };
-  },
+  setup() {
+    const router = useRouter();
+    const auth = useAuth();
+    
+    const listings = ref([]);
+    const isLoading = ref(true);
+    const error = ref(null);
+    const showDeleteModal = ref(false);
+    const selectedListingId = ref(null);
+    const isDeleting = ref(false);
+    const currentPhotoIndex = ref({});
+    const filters = reactive({
+      type: '',
+      purpose: ''
+    });
 
-  mounted() {
-    this.fetchListings();
-  },
+    const apiBaseUrl = process.env.NODE_ENV === 'production' 
+      ? 'https://rentkenya.onrender.com'
+      : 'http://localhost:5000';
 
-  methods: {
-    async fetchListings() {
-      this.isLoading = true;
-      this.error = null;
+    const fetchListings = async () => {
+      isLoading.value = true;
+      error.value = null;
       try {
-        const token = localStorage.getItem('token');
+        const token = auth.getToken();
         if (!token) {
-          this.$router.push('/login');
+          router.push({
+            name: 'Login',
+            query: { redirect: router.currentRoute.value.fullPath }
+          });
           return;
         }
 
         const params = new URLSearchParams();
-        if (this.filters.type) params.append('type', this.filters.type);
-        if (this.filters.purpose) params.append('purpose', this.filters.purpose);
+        if (filters.type) params.append('type', filters.type);
+        if (filters.purpose) params.append('purpose', filters.purpose);
 
-        const response = await axios.get(`https://rentkenya.onrender.com/api/houses?${params.toString()}`, {
-          headers: {
-            Authorization: `Bearer ${token}`
+        const response = await axios.get(
+          `${apiBaseUrl}/api/houses/my-listings${params.toString() ? `?${params.toString()}` : ''}`,
+          {
+            headers: {
+              Authorization: token
+            }
           }
-        });
+        );
         
-        this.listings = response.data;
+        if (!response.data) {
+          throw new Error('No data received from server');
+        }
+
+        listings.value = response.data;
         
-        // Initialize photo indices using direct assignment
+        // Initialize photo indices
         const photoIndices = {};
-        this.listings.forEach(listing => {
+        listings.value.forEach(listing => {
           photoIndices[listing._id] = 0;
         });
-        this.currentPhotoIndex = photoIndices;
+        currentPhotoIndex.value = photoIndices;
+
       } catch (error) {
         console.error('Error fetching listings:', error);
-        this.error = error.response?.data?.message || 'Failed to load listings. Please try again.';
+        
+        if (error.response?.status === 401) {
+          auth.setToken(null);
+          router.push({
+            name: 'Login',
+            query: { redirect: router.currentRoute.value.fullPath }
+          });
+          return;
+        }
+
+        error.value = error.response?.data?.message || 'Failed to load your listings. Please try again.';
       } finally {
-        this.isLoading = false;
+        isLoading.value = false;
       }
-    },
+    };
 
-    formatPrice(price) {
-      return price.toLocaleString();
-    },
+    const deleteListing = async () => {
+      if (!selectedListingId.value || isDeleting.value) return;
 
-    formatDate(date) {
-      return new Date(date).toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric'
-      });
-    },
-
-    editListing(id) {
-      this.$router.push(`/edit-house/${id}`);
-    },
-
-    confirmDelete(id) {
-      this.selectedListingId = id;
-      this.showDeleteModal = true;
-    },
-
-    async deleteListing() {
-      if (!this.selectedListingId || this.isDeleting) return;
-
-      this.isDeleting = true;
+      isDeleting.value = true;
       try {
-        const token = localStorage.getItem('token');
-        await axios.delete(`https://rentkenya.onrender.com/api/houses/${this.selectedListingId}`, {
+        const token = auth.getToken();
+        await axios.delete(`${apiBaseUrl}/api/houses/${selectedListingId.value}`, {
           headers: {
-            Authorization: `Bearer ${token}`
+            Authorization: token
           }
         });
         
         // Remove the deleted listing from the array
-        this.listings = this.listings.filter(listing => listing._id !== this.selectedListingId);
+        listings.value = listings.value.filter(listing => listing._id !== selectedListingId.value);
         
         // Clean up
-        this.showDeleteModal = false;
-        this.selectedListingId = null;
-        
-        // Show success notification (you can implement this based on your UI needs)
-        this.$toast?.success('Listing deleted successfully');
+        showDeleteModal.value = false;
+        selectedListingId.value = null;
       } catch (error) {
         console.error('Error deleting listing:', error);
-        this.$toast?.error(error.response?.data?.message || 'Failed to delete listing');
+        if (error.response?.status === 401) {
+          auth.setToken(null);
+          router.push({
+            name: 'Login',
+            query: { redirect: router.currentRoute.value.fullPath }
+          });
+        }
       } finally {
-        this.isDeleting = false;
+        isDeleting.value = false;
       }
-    },
+    };
 
-    handleImageError(event) {
+    const handleImageError = (event) => {
       event.target.src = '/placeholder-house.png';
-    },
+    };
 
-    getPhotoUrl(photo) {
+    const getPhotoUrl = (photo) => {
       try {
         if (!photo) return '/placeholder-house.png';
         
-        // Handle the database photo object structure
         if (photo.path) {
-          // Need to prepend the API base URL
-          return `${this.apiBaseUrl}${photo.path}`;
+          return `${apiBaseUrl}${photo.path}`;
         }
         
-        // Fallback for direct string paths 
         if (typeof photo === 'string') {
-          return photo.startsWith('http') ? photo : `${this.apiBaseUrl}${photo}`;
+          return photo.startsWith('http') ? photo : `${apiBaseUrl}${photo}`;
         }
         
         return '/placeholder-house.png';
@@ -393,24 +427,63 @@ export default {
         console.error('Error processing photo URL:', error);
         return '/placeholder-house.png';
       }
-    },
+    };
 
-    // Image carousel navigation
-    nextPhoto(listingId) {
-      const listing = this.listings.find(l => l._id === listingId);
+    const confirmDelete = (id) => {
+      selectedListingId.value = id;
+      showDeleteModal.value = true;
+    };
+
+    const formatPrice = (price) => {
+      return price.toLocaleString();
+    };
+
+    const formatDate = (date) => {
+      return new Date(date).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+      });
+    };
+
+    // Handle photo navigation
+    const nextPhoto = (listingId) => {
+      const listing = listings.value.find(l => l._id === listingId);
       if (!listing || !listing.photos.length) return;
       
-      this.currentPhotoIndex[listingId] = 
-        (this.currentPhotoIndex[listingId] + 1) % listing.photos.length;
-    },
+      currentPhotoIndex.value[listingId] = 
+        (currentPhotoIndex.value[listingId] + 1) % listing.photos.length;
+    };
 
-    prevPhoto(listingId) {
-      const listing = this.listings.find(l => l._id === listingId);
+    const prevPhoto = (listingId) => {
+      const listing = listings.value.find(l => l._id === listingId);
       if (!listing || !listing.photos.length) return;
       
-      this.currentPhotoIndex[listingId] = 
-        (this.currentPhotoIndex[listingId] - 1 + listing.photos.length) % listing.photos.length;
-    }
+      currentPhotoIndex.value[listingId] = 
+        (currentPhotoIndex.value[listingId] - 1 + listing.photos.length) % listing.photos.length;
+    };
+
+    // Fetch listings on component mount
+    fetchListings();
+
+    return {
+      listings,
+      isLoading,
+      error,
+      showDeleteModal,
+      isDeleting,
+      currentPhotoIndex,
+      filters,
+      handleImageError,
+      getPhotoUrl,
+      confirmDelete,
+      deleteListing,
+      formatPrice,
+      formatDate,
+      fetchListings,
+      nextPhoto,
+      prevPhoto
+    };
   }
 };
 </script>

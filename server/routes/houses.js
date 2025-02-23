@@ -157,6 +157,44 @@ router.put('/:id', auth, upload.array('photos', 5), async (req, res) => {
     }
 });
 
+// Get User's Listings
+router.get('/my-listings', auth, async (req, res) => {
+    try {
+        const { type, purpose } = req.query;
+        
+        // Get user details for filtering
+        const currentUser = await req.app.locals.users.findOne({ 
+            _id: new ObjectId(req.user.userId) 
+        });
+
+        if (!currentUser) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        // Build query filters with user ID
+        const filter = {
+            'seller.id': currentUser._id // Filter by seller's ID
+        };
+        
+        // Add optional filters
+        if (type) filter.type = type;
+        if (purpose) filter.purpose = purpose;
+
+        const houses = await req.app.locals.houses
+            .find(filter)
+            .sort({ createdAt: -1 })
+            .toArray();
+
+        res.json(houses);
+    } catch (error) {
+        console.error('Fetch My Listings Error:', error);
+        res.status(500).json({ 
+            message: 'Failed to fetch your listings', 
+            error: error.message 
+        });
+    }
+});
+
 // Get All Houses
 router.get('/', async (req, res) => {
     try {
@@ -272,5 +310,7 @@ router.delete('/:id', auth, async (req, res) => {
         });
     }
 });
+
+
 
 module.exports = router;
