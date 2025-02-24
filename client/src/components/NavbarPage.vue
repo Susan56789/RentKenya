@@ -129,10 +129,12 @@
   </nav>
 </template>
 
+
 <script>
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuth } from '@/composables/useAuth'
+import axios from 'axios'
 
 export default {
   name: 'NavbarComponent',
@@ -161,8 +163,19 @@ export default {
     }
 
     const handleLogout = () => {
+      // Clear auth token
       auth.setToken(null)
+      
+      // Clear axios default headers
+      delete axios.defaults.headers.common['Authorization']
+      
+      // Clear any other auth-related localStorage items
+      localStorage.removeItem('rememberMe')
+      
+      // Close dropdown
       closeDropdown()
+      
+      // Redirect to home page
       router.push('/')
     }
 
@@ -183,10 +196,18 @@ export default {
       }
     }
 
+    // Add event listener on mount
     onMounted(() => {
       document.addEventListener('click', handleClickOutside)
+      
+      // Check authentication status on mount
+      const token = auth.getToken()
+      if (token) {
+        axios.defaults.headers.common['Authorization'] = token
+      }
     })
 
+    // Cleanup on unmount
     onUnmounted(() => {
       document.removeEventListener('click', handleClickOutside)
     })

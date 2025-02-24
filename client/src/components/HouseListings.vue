@@ -208,7 +208,7 @@
 </template>
 
 <script>
-import { ref, reactive, onMounted } from 'vue';
+import { ref, reactive, onMounted, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuth } from '@/composables/useAuth';
 import axios from 'axios';
@@ -246,24 +246,59 @@ export default {
       ? 'https://rentkenya.onrender.com' 
       : 'http://localhost:5000';
 
-    // Create axios instance
-    const api = axios.create({
-      baseURL: apiBaseUrl
-    });
+    // Fetch Listings
+    const fetchListings = async () => {
+      isLoading.value = true;
+      error.value = null;
 
-    // Add auth token to requests
-    api.interceptors.request.use(config => {
-      const token = auth.getToken();
-      if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
+      try {
+        const token = auth.getToken();
+        if (!token) {
+          router.push('/login');
+          return;
+        }
+
+        const params = new URLSearchParams();
+        if (filters.type) params.append('type', filters.type);
+        if (filters.purpose) params.append('purpose', filters.purpose);
+
+        const response = await axios.get(
+          `${apiBaseUrl}/api/houses/my-listings${params.toString() ? `?${params.toString()}` : ''}`,
+          {
+            headers: {
+              Authorization: token
+            }
+          }
+        );
+
+        listings.value = response.data.houses || response.data || [];
+        
+        // Initialize photo indices and loading states
+        listings.value.forEach(listing => {
+          if (typeof currentPhotoIndices.value[listing._id] === 'undefined') {
+            currentPhotoIndices.value[listing._id] = 0;
+          }
+          loadedImages.value[listing._id] = false;
+        });
+
+      } catch (err) {
+        console.error('Error fetching listings:', err);
+        error.value = err.response?.data?.message || 'Failed to load listings';
+        if (err.response?.status === 401) {
+          auth.setToken(null);
+          router.push('/login');
+        }
+      } finally {
+        isLoading.value = false;
       }
-      return config;
-    });
+    };
 
     // Image Handling
     const getListingImageSrc = (listingId) => {
-      const index = currentPhotoIndices.value[listingId] || 0;
       const token = auth.getToken();
+      if (!token) return '/placeholder-house.png';
+      
+      const index = currentPhotoIndices.value[listingId] || 0;
       return `${apiBaseUrl}/api/houses/image/${listingId}/${index}?token=${token}`;
     };
 
@@ -285,7 +320,6 @@ export default {
       currentPhotoIndices.value[listingId] = 
         (currentIndex + direction + totalPhotos) % totalPhotos;
       
-      // Reset loaded state for new image
       loadedImages.value[listingId] = false;
     };
 
@@ -294,11 +328,20 @@ export default {
       loadedImages.value[listingId] = false;
     };
 
-    // Fetch Listings
-    const fetchListings = async () => {
-      isLoading.value = true;
-      error.value = null;
+    // Delete Functionality
+    const confirmDelete = (id) => {
+      if (!auth.isAuthenticated()) {
+        router.push('/login');
+        return;
+      }
+      selectedListingId.value = id;
+      showDeleteModal.value = true;
+    };
 
+    const deleteListing = async () => {
+      if (!selectedListingId.value || isDeleting.value) return;
+
+      isDeleting.value = true;
       try {
         const token = auth.getToken();
         if (!token) {
@@ -306,53 +349,14 @@ export default {
           return;
         }
 
-        const params = new URLSearchParams();
-        if (filters.type) params.append('type', filters.type);
-        if (filters.purpose) params.append('purpose', filters.purpose);
-
-        const response = await axios.get(
-          `${apiBaseUrl}/api/houses/my-listings${params.toString() ? `?${params.toString()}` : ''}`,
+        await axios.delete(
+          `${apiBaseUrl}/api/houses/${selectedListingId.value}`,
           {
-            headers: { 
-              Authorization: `Bearer ${token}` 
+            headers: {
+              Authorization: token
             }
           }
         );
-
-        listings.value = response.data;
-        
-        // Initialize photo indices and loading states for new listings
-        listings.value.forEach(listing => {
-          if (typeof currentPhotoIndices.value[listing._id] === 'undefined') {
-            currentPhotoIndices.value[listing._id] = 0;
-          }
-          loadedImages.value[listing._id] = false;
-        });
-
-      } catch (error) {
-        console.error('Error fetching listings:', error);
-        if (error.response?.status === 401) {
-          router.push('/login');
-        } else {
-          error.value = 'Failed to load listings. Please try again.';
-        }
-      } finally {
-        isLoading.value = false;
-      }
-    };
-
-    // Delete Functionality
-    const confirmDelete = (id) => {
-      selectedListingId.value = id;
-      showDeleteModal.value = true;
-    };
-
-    const deleteListing = async () => {
-      if (!selectedListingId.value || isDeleting.value || !auth.isAuthenticated()) return;
-
-      isDeleting.value = true;
-      try {
-        await api.delete(`/api/houses/${selectedListingId.value}`);
 
         // Remove listing from state
         listings.value = listings.value.filter(
@@ -366,9 +370,11 @@ export default {
         showDeleteModal.value = false;
         selectedListingId.value = null;
 
-      } catch (error) {
-        console.error('Error deleting listing:', error);
-        if (error.response?.status === 401) {
+      } catch (err) {
+        console.error('Error deleting listing:', err);
+        error.value = err.response?.data?.message || 'Failed to delete listing';
+        if (err.response?.status === 401) {
+          auth.setToken(null);
           router.push('/login');
         }
       } finally {
@@ -381,20 +387,22 @@ export default {
       return price?.toLocaleString() || '0';
     };
 
-    const formatDate = (date) => {
-      return new Date(date).toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric'
-      });
-    };
-
     // Initialize component
     onMounted(() => {
-      fetchListings();
+      if (auth.isAuthenticated()) {
+        fetchListings();
+      } else {
+        router.push('/login');
+      }
     });
 
-    // Expose necessary functions and reactive state
+    // Watch for filter changes
+    watch(filters, () => {
+      if (auth.isAuthenticated()) {
+        fetchListings();
+      }
+    });
+
     return {
       // State
       listings,
@@ -408,19 +416,16 @@ export default {
       filters,
       houseTypes: HOUSE_TYPES,
 
-      // Image Functions
+      // Functions
       getListingImageSrc,
       handleImageLoad,
       handleImageError,
       changePhoto,
       setPhotoIndex,
-
-      // Data Functions
       fetchListings,
       confirmDelete,
       deleteListing,
-      formatPrice,
-      formatDate
+      formatPrice
     };
   }
 };

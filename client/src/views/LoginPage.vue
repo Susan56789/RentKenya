@@ -141,7 +141,7 @@ export default {
 
   setup() {
     const router = useRouter();
-    const { setToken } = useAuth();
+    const auth = useAuth(); // Get full auth object
     const error = ref('');
     const isLoading = ref(false);
     const showPassword = ref(false);
@@ -191,11 +191,8 @@ export default {
         // Create token string with Bearer prefix
         const tokenString = `Bearer ${token}`;
         
-        // Update shared auth state
-        setToken(tokenString);
-        
-        // Update axios defaults
-        axios.defaults.headers.common['Authorization'] = tokenString;
+        // Use auth.setToken which will handle both localStorage and axios headers
+        auth.setToken(tokenString);
 
         // Handle remember me preference
         if (form.rememberMe) {
