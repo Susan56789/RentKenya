@@ -7,19 +7,8 @@ const crypto = require('crypto');
 
 const router = express.Router();
 
-
-// Configure multer for handling file uploads
-const storage = multer.diskStorage({
-    destination: './uploads/',
-    filename: (req, file, cb) => {
-        // Generate a unique filename using timestamp and random string
-        const uniqueSuffix = `${Date.now()}-${crypto.randomBytes(8).toString('hex')}`;
-        const fileExtension = path.extname(file.originalname).toLowerCase();
-        const sanitizedFileName = `house-${uniqueSuffix}${fileExtension}`;
-        cb(null, sanitizedFileName);
-    }
-});
-
+// Multer configuration
+const storage = multer.memoryStorage();
 const upload = multer({
     storage,
     limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
@@ -35,44 +24,61 @@ const upload = multer({
     }
 });
 
-// Add House - requires authentication
+// Validation helpers
+const validateHouseData = (data) => {
+    const requiredFields = ['location', 'price', 'datePosted', 'type', 'purpose'];
+    const missingFields = requiredFields.filter(field => !data[field]);
+    
+    if (missingFields.length > 0) {
+        throw new Error(`Missing required fields: ${missingFields.join(', ')}`);
+    }
+    
+    if (isNaN(Number(data.price)) || Number(data.price) <= 0) {
+        throw new Error('Invalid price value');
+    }
+    
+    const date = new Date(data.datePosted);
+    if (isNaN(date.getTime())) {
+        throw new Error('Invalid date format');
+    }
+};
+
+const processPhotos = (files) => {
+    if (!files || files.length < 2) {
+        throw new Error('Minimum 2 photos required');
+    }
+
+    return files.map(file => ({
+        data: file.buffer,
+        contentType: file.mimetype,
+        originalName: file.originalname,
+        size: file.size,
+        uploadDate: new Date(),
+        hash: crypto.createHash('md5').update(file.buffer).digest('hex')
+    }));
+};
+
+// Route handlers
 router.post('/', auth, upload.array('photos', 5), async (req, res) => {
     try {
-        const { location, price, datePosted, type, purpose } = req.body;
+        validateHouseData(req.body);
         
-        // Validate required fields
-        if (!location || !price || !datePosted || !type || !purpose) {
-            return res.status(400).json({ message: 'All fields are required' });
-        }
-
-        // Validate photos
-        if (!req.files || req.files.length < 2) {
-            return res.status(400).json({ message: 'Minimum 2 photos required' });
-        }
-
-        // Get user details
-        const user = await req.app.locals.users.findOne({ _id: new ObjectId(req.user.userId) });
+        const user = await req.app.locals.users.findOne({ 
+            _id: new ObjectId(req.user.userId) 
+        });
+        
         if (!user) {
             return res.status(404).json({ message: 'User not found' });
         }
 
-        // Create photo metadata array
-        const photos = req.files.map(file => ({
-            filename: file.filename,
-            originalName: file.originalname,
-            path: `/uploads/${file.filename}`,
-            size: file.size,
-            mimeType: file.mimetype,
-            uploadDate: new Date()
-        }));
-
-        // Create house document
+        const photos = processPhotos(req.files);
+        
         const newHouse = {
-            location,
-            price: Number(price),
-            datePosted: new Date(datePosted),
-            type,
-            purpose,
+            location: req.body.location,
+            price: Number(req.body.price),
+            datePosted: new Date(req.body.datePosted),
+            type: req.body.type,
+            purpose: req.body.purpose,
             photos,
             seller: {
                 id: user._id,
@@ -85,123 +91,139 @@ router.post('/', auth, upload.array('photos', 5), async (req, res) => {
         };
 
         const result = await req.app.locals.houses.insertOne(newHouse);
-        res.status(201).json({ 
+        
+        // Return response without binary data
+        const responseHouse = {
+            ...newHouse,
+            photos: photos.map(photo => ({
+                hash: photo.hash,
+                contentType: photo.contentType,
+                originalName: photo.originalName,
+                size: photo.size,
+                uploadDate: photo.uploadDate
+            }))
+        };
+
+        res.status(201).json({
+            success: true,
             message: 'House added successfully',
             houseId: result.insertedId,
-            house: newHouse
+            house: responseHouse
         });
 
     } catch (error) {
         console.error('Add House Error:', error);
-        res.status(500).json({ 
-            message: 'Failed to add house', 
-            error: error.message 
+        res.status(error.status || 500).json({
+            success: false,
+            message: 'Failed to add house',
+            error: error.message
         });
     }
 });
 
-// Update House
-router.put('/:id', auth, upload.array('photos', 5), async (req, res) => {
+router.get('/image/:houseId/:photoIndex', async (req, res) => {
     try {
         const house = await req.app.locals.houses.findOne({ 
-            _id: new ObjectId(req.params.id) 
+            _id: new ObjectId(req.params.houseId) 
         });
         
-        if (!house) {
-            return res.status(404).json({ message: 'House not found' });
+        if (!house || !house.photos || !house.photos[req.params.photoIndex]) {
+            return res.status(404).json({ 
+                success: false,
+                message: 'Image not found' 
+            });
         }
         
-        if (house.seller.id.toString() !== req.user.userId) {
-            return res.status(403).json({ message: 'Not authorized' });
-        }
-
-        const updates = {
-            ...req.body,
-            updatedAt: new Date()
-        };
-
-        // Handle new photos if uploaded
-        if (req.files?.length > 0) {
-            const newPhotos = req.files.map(file => ({
-                filename: file.filename,
-                originalName: file.originalname,
-                path: `/uploads/${file.filename}`,
-                size: file.size,
-                mimeType: file.mimetype,
-                uploadDate: new Date()
-            }));
-
-            // If replacing all photos
-            if (req.body.replaceAllPhotos === 'true') {
-                updates.photos = newPhotos;
-            } else {
-                // Append new photos to existing ones
-                updates.photos = [...(house.photos || []), ...newPhotos];
-            }
-        }
-
-        if (updates.price) updates.price = Number(updates.price);
-        if (updates.datePosted) updates.datePosted = new Date(updates.datePosted);
-
-        await req.app.locals.houses.updateOne(
-            { _id: new ObjectId(req.params.id) },
-            { $set: updates }
-        );
-
-        res.json({ message: 'House updated successfully' });
+        const photo = house.photos[req.params.photoIndex];
+        const imageBuffer = photo.data.buffer || photo.data;
+        
+        // Set caching headers
+        res.set({
+            'Cache-Control': 'public, max-age=31557600', // 1 year
+            'ETag': `"${photo.hash}"`,
+            'Content-Type': photo.contentType
+        });
+        
+        res.send(imageBuffer);
+        
     } catch (error) {
-        res.status(500).json({ 
-            message: 'Failed to update house', 
-            error: error.message 
+        console.error('Image fetch error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch image',
+            error: error.message
         });
     }
 });
 
-// Get User's Listings
 router.get('/my-listings', auth, async (req, res) => {
     try {
-        const { type, purpose } = req.query;
+        const { type, purpose, page = 1, limit = 10 } = req.query;
+        const skip = (page - 1) * limit;
         
-        // Get user details for filtering
-        const currentUser = await req.app.locals.users.findOne({ 
-            _id: new ObjectId(req.user.userId) 
-        });
-
-        if (!currentUser) {
-            return res.status(404).json({ message: 'User not found' });
-        }
-
-        // Build query filters with user ID
         const filter = {
-            'seller.id': currentUser._id // Filter by seller's ID
+            'seller.id': new ObjectId(req.user.userId)
         };
         
-        // Add optional filters
         if (type) filter.type = type;
         if (purpose) filter.purpose = purpose;
 
-        const houses = await req.app.locals.houses
-            .find(filter)
-            .sort({ createdAt: -1 })
-            .toArray();
+        const [houses, total] = await Promise.all([
+            req.app.locals.houses
+                .find(filter)
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(Number(limit))
+                .toArray(),
+            req.app.locals.houses.countDocuments(filter)
+        ]);
 
-        res.json(houses);
+        // Remove binary data from response
+        const sanitizedHouses = houses.map(house => ({
+            ...house,
+            photos: house.photos.map(photo => ({
+                hash: photo.hash,
+                contentType: photo.contentType,
+                originalName: photo.originalName,
+                size: photo.size,
+                uploadDate: photo.uploadDate
+            }))
+        }));
+
+        res.json({
+            success: true,
+            houses: sanitizedHouses,
+            pagination: {
+                total,
+                page: Number(page),
+                totalPages: Math.ceil(total / limit)
+            }
+        });
     } catch (error) {
         console.error('Fetch My Listings Error:', error);
-        res.status(500).json({ 
-            message: 'Failed to fetch your listings', 
-            error: error.message 
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch your listings',
+            error: error.message
         });
     }
 });
 
-// Get All Houses
 router.get('/', async (req, res) => {
     try {
-        const { type, purpose, location, minPrice, maxPrice } = req.query;
+        const { 
+            type, 
+            purpose, 
+            location, 
+            minPrice, 
+            maxPrice,
+            page = 1,
+            limit = 10
+        } = req.query;
         
-        // Build query filters
+        const skip = (page - 1) * limit;
         const filter = {};
+        
         if (type) filter.type = type;
         if (purpose) filter.purpose = purpose;
         if (location) filter.location = new RegExp(location, 'i');
@@ -211,21 +233,46 @@ router.get('/', async (req, res) => {
             if (maxPrice) filter.price.$lte = Number(maxPrice);
         }
 
-        const houses = await req.app.locals.houses
-            .find(filter)
-            .sort({ createdAt: -1 })
-            .toArray();
+        const [houses, total] = await Promise.all([
+            req.app.locals.houses
+                .find(filter)
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(Number(limit))
+                .toArray(),
+            req.app.locals.houses.countDocuments(filter)
+        ]);
 
-        res.json(houses);
+        // Remove binary data from response
+        const sanitizedHouses = houses.map(house => ({
+            ...house,
+            photos: house.photos.map(photo => ({
+                hash: photo.hash,
+                contentType: photo.contentType,
+                originalName: photo.originalName,
+                size: photo.size,
+                uploadDate: photo.uploadDate
+            }))
+        }));
+
+        res.json({
+            success: true,
+            houses: sanitizedHouses,
+            pagination: {
+                total,
+                page: Number(page),
+                totalPages: Math.ceil(total / limit)
+            }
+        });
     } catch (error) {
-        res.status(500).json({ 
-            message: 'Failed to fetch houses', 
-            error: error.message 
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch houses',
+            error: error.message
         });
     }
 });
 
-// Get House by ID
 router.get('/:id', async (req, res) => {
     try {
         const house = await req.app.locals.houses.findOne({ 
@@ -233,19 +280,37 @@ router.get('/:id', async (req, res) => {
         });
         
         if (!house) {
-            return res.status(404).json({ message: 'House not found' });
+            return res.status(404).json({
+                success: false,
+                message: 'House not found'
+            });
         }
         
-        res.json(house);
+        // Remove binary data from response
+        const sanitizedHouse = {
+            ...house,
+            photos: house.photos.map(photo => ({
+                hash: photo.hash,
+                contentType: photo.contentType,
+                originalName: photo.originalName,
+                size: photo.size,
+                uploadDate: photo.uploadDate
+            }))
+        };
+        
+        res.json({
+            success: true,
+            house: sanitizedHouse
+        });
     } catch (error) {
-        res.status(500).json({ 
-            message: 'Failed to fetch house', 
-            error: error.message 
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch house',
+            error: error.message
         });
     }
 });
 
-// Update House
 router.put('/:id', auth, upload.array('photos', 5), async (req, res) => {
     try {
         const house = await req.app.locals.houses.findOne({ 
@@ -253,40 +318,55 @@ router.put('/:id', auth, upload.array('photos', 5), async (req, res) => {
         });
         
         if (!house) {
-            return res.status(404).json({ message: 'House not found' });
+            return res.status(404).json({
+                success: false,
+                message: 'House not found'
+            });
         }
         
         if (house.seller.id.toString() !== req.user.userId) {
-            return res.status(403).json({ message: 'Not authorized' });
+            return res.status(403).json({
+                success: false,
+                message: 'Not authorized to update this listing'
+            });
         }
 
-        const updates = {
-            ...req.body,
-            updatedAt: new Date()
-        };
-
-        if (req.files?.length > 0) {
-            updates.photos = req.files.map(file => `/uploads/${file.filename}`);
-        }
-
+        const updates = { ...req.body };
+        delete updates._id; // Prevent _id modification
+        
         if (updates.price) updates.price = Number(updates.price);
         if (updates.datePosted) updates.datePosted = new Date(updates.datePosted);
+        updates.updatedAt = new Date();
+
+        // Handle photo updates if present
+        if (req.files?.length > 0) {
+            const newPhotos = processPhotos(req.files);
+            
+            if (req.body.replaceAllPhotos === 'true') {
+                updates.photos = newPhotos;
+            } else {
+                updates.photos = [...(house.photos || []), ...newPhotos];
+            }
+        }
 
         await req.app.locals.houses.updateOne(
             { _id: new ObjectId(req.params.id) },
             { $set: updates }
         );
 
-        res.json({ message: 'House updated successfully' });
+        res.json({
+            success: true,
+            message: 'House updated successfully'
+        });
     } catch (error) {
-        res.status(500).json({ 
-            message: 'Failed to update house', 
-            error: error.message 
+        res.status(500).json({
+            success: false,
+            message: 'Failed to update house',
+            error: error.message
         });
     }
 });
 
-// Delete House
 router.delete('/:id', auth, async (req, res) => {
     try {
         const house = await req.app.locals.houses.findOne({ 
@@ -294,23 +374,34 @@ router.delete('/:id', auth, async (req, res) => {
         });
         
         if (!house) {
-            return res.status(404).json({ message: 'House not found' });
+            return res.status(404).json({
+                success: false,
+                message: 'House not found'
+            });
         }
         
         if (house.seller.id.toString() !== req.user.userId) {
-            return res.status(403).json({ message: 'Not authorized' });
+            return res.status(403).json({
+                success: false,
+                message: 'Not authorized to delete this listing'
+            });
         }
 
-        await req.app.locals.houses.deleteOne({ _id: new ObjectId(req.params.id) });
-        res.json({ message: 'House deleted successfully' });
+        await req.app.locals.houses.deleteOne({ 
+            _id: new ObjectId(req.params.id) 
+        });
+        
+        res.json({
+            success: true,
+            message: 'House deleted successfully'
+        });
     } catch (error) {
-        res.status(500).json({ 
-            message: 'Failed to delete house', 
-            error: error.message 
+        res.status(500).json({
+            success: false,
+            message: 'Failed to delete house',
+            error: error.message
         });
     }
 });
-
-
 
 module.exports = router;

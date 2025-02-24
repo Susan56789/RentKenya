@@ -90,26 +90,27 @@
         
         <p v-if="photoError" class="text-sm text-red-500 mt-1">{{ photoError }}</p>
 
-        <!-- Photo Previews -->
-        <div v-if="photoPreviewUrls.length > 0" class="grid grid-cols-3 gap-2 mt-2">
-          <div v-for="(url, index) in photoPreviewUrls" :key="index" class="relative group">
-            <img 
-              :src="url"
-              :alt="'Preview ' + (index + 1)"
-              class="w-full h-24 object-cover rounded-md"
-            />
-            <button 
-              type="button"
-              @click="removePhoto(index)"
-              class="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-        </div>
+         
+    <!-- Photo Previews -->
+    <div v-if="photoPreviewUrls.length > 0" class="grid grid-cols-3 gap-2 mt-2">
+      <div v-for="(url, index) in photoPreviewUrls" :key="index" class="relative group">
+        <img 
+          :src="url"
+          :alt="'Preview ' + (index + 1)"
+          class="w-full h-24 object-cover rounded-md"
+        />
+        <button 
+          type="button"
+          @click="removePhoto(index)"
+          class="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
       </div>
+    </div>
+  </div>
 
       <!-- Submit Button -->
       <button
@@ -195,8 +196,10 @@ export default {
     const api = axios.create({
       baseURL: process.env.NODE_ENV === 'production' 
         ? 'https://rentkenya.onrender.com' 
-        : 'http://localhost:5000'
+        : 'http://localhost:5000',
+         responseType: 'arraybuffer' 
     });
+
 
     // Add auth token to requests
     api.interceptors.request.use(config => {
@@ -279,6 +282,25 @@ export default {
       );
     });
 
+    // Helper function to get image URL
+    const getImageUrl = (houseId, photoIndex) => {
+      return `${api.defaults.baseURL}/api/houses/image/${houseId}/${photoIndex}`;
+    };
+
+    // Display image helper
+    const displayImage = async (houseId, photoIndex) => {
+      try {
+        const response = await api.get(`/api/houses/image/${houseId}/${photoIndex}`);
+        const blob = new Blob([response.data], { 
+          type: response.headers['content-type'] 
+        });
+        return URL.createObjectURL(blob);
+      } catch (error) {
+        console.error('Error loading image:', error);
+        return null;
+      }
+    };
+
     // Form submission
     const handleSubmit = async () => {
       if (!isFormValid.value) return;
@@ -295,7 +317,7 @@ export default {
           formPayload.append(key, value.toString().trim());
         });
 
-        // Append photos with the correct field name
+        // Append photos
         photos.value.forEach(photo => {
           formPayload.append('photos', photo);
         });
@@ -306,7 +328,7 @@ export default {
 
         successMessage.value = response.data.message || 'House added successfully!';
         
-        // Clear form after successful submission
+        // Clear form and previews
         formData.location = '';
         formData.price = '';
         formData.type = '';
@@ -321,14 +343,19 @@ export default {
 
       } catch (error) {
         console.error('Submission error:', error);
-        
-        if (error.message === 'No authentication token found') {
-          router.push('/login');
-        } else {
-          errorMessage.value = error.response?.data?.message || 'Failed to add house. Please try again.';
-        }
+        handleSubmissionError(error);
       } finally {
         isSubmitting.value = false;
+      }
+    };
+
+    
+    // Error handling helper
+    const handleSubmissionError = (error) => {
+      if (error.message === 'No authentication token found') {
+        router.push('/login');
+      } else {
+        errorMessage.value = error.response?.data?.message || 'Failed to add house. Please try again.';
       }
     };
 
@@ -357,7 +384,9 @@ export default {
       isFormValid,
       handleFileUpload,
       removePhoto,
-      handleSubmit
+      handleSubmit,
+      getImageUrl,
+      displayImage
     };
   }
 };
