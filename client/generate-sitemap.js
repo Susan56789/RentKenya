@@ -47,7 +47,29 @@ class SitemapGenerator {
   }
 
   formatDate(date) {
-    return format(new Date(date), "yyyy-MM-dd'T'HH:mm:ssxxx");
+    try {
+      // Ensure we have a valid date
+      const validDate = new Date(date);
+      if (isNaN(validDate.getTime())) {
+        throw new Error('Invalid date');
+      }
+      return format(validDate, "yyyy-MM-dd");
+    } catch (error) {
+      return format(new Date(), "yyyy-MM-dd");
+    }
+  }
+
+  escapeXml(unsafe) {
+    return unsafe.replace(/[<>&'"]/g, (c) => {
+      switch (c) {
+        case '<': return '&lt;';
+        case '>': return '&gt;';
+        case '&': return '&amp;';
+        case "'": return '&apos;';
+        case '"': return '&quot;';
+        default: return c;
+      }
+    });
   }
 
   async ensureOutputDir() {
@@ -66,22 +88,56 @@ class SitemapGenerator {
           'Accept': 'application/json'
         }
       });
-      return response.data;
+      return Array.isArray(response.data) ? response.data : [];
     } catch (error) {
       console.error('Error fetching house listings:', error.message);
-      if (error.response) {
-        console.error('API Response:', error.response.data);
-      }
       return [];
     }
   }
 
+  validateUrl(url) {
+    try {
+      // Remove any leading/trailing whitespace
+      url = url.trim();
+      
+      // Ensure URL starts with forward slash if it's a path
+      if (!url.startsWith('http') && !url.startsWith('/')) {
+        url = '/' + url;
+      }
+
+      // Create full URL
+      const fullUrl = url.startsWith('http') ? url : new URL(url, this.config.siteUrl).toString();
+      
+      // Validate URL format
+      new URL(fullUrl);
+      
+      return this.escapeXml(fullUrl);
+    } catch (error) {
+      console.error(`Invalid URL: ${url}`);
+      return null;
+    }
+  }
+
   addUrl({ url, changefreq, priority, lastmod }) {
-    const fullUrl = new URL(url, this.config.siteUrl).toString();
+    const validUrl = this.validateUrl(url);
+    if (!validUrl) return;
+
+    // Validate changefreq
+    const validChangefreqs = ['always', 'hourly', 'daily', 'weekly', 'monthly', 'yearly', 'never'];
+    if (!validChangefreqs.includes(changefreq)) {
+      changefreq = 'weekly';
+    }
+
+    // Validate priority
+    priority = parseFloat(priority);
+    if (isNaN(priority) || priority < 0 || priority > 1) {
+      priority = 0.5;
+    }
+
     this.xmlUrls.push(
       '  <url>\n' +
-      `    <loc>${fullUrl}</loc>\n` +
-      `    <lastmod>${this.formatDate(lastmod || new Date())}</loc>\n` +
+      `    <loc>${validUrl}</loc>\n` +
+      `    <lastmod>${this.formatDate(lastmod || new Date())}</lastmod>\n` +
       `    <changefreq>${changefreq}</changefreq>\n` +
       `    <priority>${priority.toFixed(1)}</priority>\n` +
       '  </url>'
@@ -94,6 +150,8 @@ class SitemapGenerator {
       .map(route => `Disallow: ${route.url}`)
       .join('\n');
 
+    const sitemapUrl = this.validateUrl('/sitemap.xml');
+    
     return `User-agent: *
 Allow: /
 ${noindexRoutes}
@@ -101,15 +159,12 @@ Disallow: /profile
 Disallow: /my-listings
 
 # Sitemap
-Sitemap: ${new URL('sitemap.xml', this.config.siteUrl).toString()}`;
+Sitemap: ${sitemapUrl}`;
   }
 
   generateSitemapXml() {
     return '<?xml version="1.0" encoding="UTF-8"?>\n' +
-           '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"\n' +
-           '        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"\n' +
-           '        xsi:schemaLocation="http://www.sitemaps.org/schemas/sitemap/0.9\n' +
-           '        http://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd">\n' +
+           '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' +
            this.xmlUrls.join('\n') +
            '\n</urlset>';
   }
@@ -126,13 +181,19 @@ Sitemap: ${new URL('sitemap.xml', this.config.siteUrl).toString()}`;
       // Add dynamic house listings
       const houses = await this.fetchHouseListings();
       houses.forEach(house => {
-        this.addUrl({
-          url: `/house/${house._id}`,
-          changefreq: 'daily',
-          priority: 0.9,
-          lastmod: house.updatedAt
-        });
+        if (house && house._id) {
+          this.addUrl({
+            url: `/house/${house._id}`,
+            changefreq: 'daily',
+            priority: 0.9,
+            lastmod: house.updatedAt
+          });
+        }
       });
+
+      if (this.xmlUrls.length === 0) {
+        throw new Error('No valid URLs generated for sitemap');
+      }
 
       // Write sitemap.xml
       const sitemapPath = path.join(this.config.outputDir, 'sitemap.xml');
