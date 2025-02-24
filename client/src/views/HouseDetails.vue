@@ -182,6 +182,7 @@
 <script>
 import { ref, computed, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
+import axios from 'axios';
 
 export default {
   name: 'HouseDetail',
@@ -194,8 +195,8 @@ export default {
     const currentPhotoIndex = ref(0);
     const imageLoading = ref(true);
 
-    const apiBaseUrl = process.env.NODE_ENV === 'production' 
-      ? 'https://rentkenya.onrender.com' 
+    const apiBaseUrl = process.env.NODE_ENV === 'production'
+      ? 'https://rentkenya.onrender.com'
       : 'http://localhost:5000';
 
     const getHouseImageSrc = computed(() => {
@@ -204,16 +205,32 @@ export default {
     });
 
     const formatPrice = (price) => {
-      return new Intl.NumberFormat('en-KE').format(price || 0);
+      try {
+        return new Intl.NumberFormat('en-KE').format(Number(price) || 0);
+      } catch {
+        return '0';
+      }
     };
 
-    const formatDate = (dateString) => {
-      if (!dateString) return 'Not available';
-      return new Date(dateString).toLocaleDateString('en-KE', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-      });
+    const formatDate = (dateStr) => {
+      if (!dateStr) return 'Not available';
+      
+      try {
+        const date = new Date(dateStr);
+        if (!date || isNaN(date.getTime())) {
+          return 'Not available';
+        }
+        
+        const options = {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric'
+        };
+        
+        return new Intl.DateTimeFormat('en-KE', options).format(date);
+      } catch {
+        return dateStr || 'Not available';
+      }
     };
 
     const handleImageLoad = () => {
@@ -230,24 +247,52 @@ export default {
       error.value = null;
       
       try {
-        const response = await fetch(`${apiBaseUrl}/api/houses/${route.params.id}`);
+        console.log('Fetching house details for ID:', route.params.id);
         
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
+        const response = await axios.get(`${apiBaseUrl}/api/houses/${route.params.id}`);
+        console.log('Raw API Response:', JSON.stringify(response.data, null, 2));
+        
+        if (!response.data?.house) {
+          throw new Error('House data not found');
         }
+
+        // Get the raw house data
+        const rawData = response.data.house;
+        console.log('Raw house data:', JSON.stringify(rawData, null, 2));
+
+        // Create a new object with ONLY the fields we need, keeping dates as strings
+        const processedHouse = {
+          _id: rawData._id,
+          location: rawData.location || '',
+          price: Number(rawData.price) || 0,
+          datePosted: String(rawData.datePosted || ''),
+          type: rawData.type || '',
+          purpose: rawData.purpose || '',
+          photos: Array.isArray(rawData.photos) ? rawData.photos : [],
+          seller: {
+            id: rawData.seller?.id || '',
+            name: rawData.seller?.name || '',
+            email: rawData.seller?.email || '',
+            phone: rawData.seller?.phone || ''
+          },
+          createdAt: String(rawData.createdAt || ''),
+          status: rawData.status || ''
+        };
+
+        console.log('Processed house data:', JSON.stringify(processedHouse, null, 2));
         
-        const data = await response.json();
-        
-        if (!data.success) {
-          throw new Error(data.message || 'Failed to fetch house details');
-        }
-        
-        house.value = data.house;
+        // Assign to reactive ref
+        house.value = processedHouse;
         imageLoading.value = true;
 
       } catch (err) {
-        console.error('Error fetching house details:', err);
-        error.value = err.message || 'Failed to load house details. Please try again later.';
+        console.error('Detailed error:', {
+          message: err.message,
+          stack: err.stack,
+          data: err.response?.data
+        });
+        error.value = 'Failed to load house details. Please try again later.';
+        house.value = null;
       } finally {
         loading.value = false;
       }

@@ -223,6 +223,18 @@ const HOUSE_TYPES = [
   'Five Bedroom'
 ];
 
+// Date validation utility
+const isValidDate = (dateValue) => {
+  if (!dateValue) return false;
+  const date = new Date(dateValue);
+  return date instanceof Date && !isNaN(date);
+};
+
+// Date sanitization utility
+const sanitizeDate = (dateValue) => {
+  return isValidDate(dateValue) ? new Date(dateValue).toISOString() : new Date().toISOString();
+};
+
 export default {
   name: 'MyListings',
   
@@ -246,7 +258,7 @@ export default {
       ? 'https://rentkenya.onrender.com' 
       : 'http://localhost:5000';
 
-    // Fetch Listings
+    // Fetch Listings with date sanitization
     const fetchListings = async () => {
       isLoading.value = true;
       error.value = null;
@@ -271,7 +283,14 @@ export default {
           }
         );
 
-        listings.value = response.data.houses || response.data || [];
+        // Sanitize dates in the response data
+        const sanitizedListings = (response.data.houses || response.data || []).map(listing => ({
+          ...listing,
+          createdAt: sanitizeDate(listing.createdAt),
+          updatedAt: sanitizeDate(listing.updatedAt)
+        }));
+
+        listings.value = sanitizedListings;
         
         // Initialize photo indices and loading states
         listings.value.forEach(listing => {
@@ -328,7 +347,7 @@ export default {
       loadedImages.value[listingId] = false;
     };
 
-    // Delete Functionality
+    // Delete Functionality with date handling
     const confirmDelete = (id) => {
       if (!auth.isAuthenticated()) {
         router.push('/login');
@@ -387,6 +406,12 @@ export default {
       return price?.toLocaleString() || '0';
     };
 
+    // Format date utility
+    const formatDate = (dateString) => {
+      if (!isValidDate(dateString)) return '';
+      return new Date(dateString).toLocaleDateString();
+    };
+
     // Initialize component
     onMounted(() => {
       if (auth.isAuthenticated()) {
@@ -425,7 +450,9 @@ export default {
       fetchListings,
       confirmDelete,
       deleteListing,
-      formatPrice
+      formatPrice,
+      formatDate, // New utility function
+      isValidDate  // Exposed for template usage if needed
     };
   }
 };
