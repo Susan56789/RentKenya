@@ -247,10 +247,10 @@ export default {
       error.value = null;
       
       try {
-        console.log('Fetching house details for ID:', route.params.id);
+        
         
         const response = await axios.get(`${apiBaseUrl}/api/houses/${route.params.id}`);
-        console.log('Raw API Response:', JSON.stringify(response.data, null, 2));
+        
         
         if (!response.data?.house) {
           throw new Error('House data not found');
@@ -258,9 +258,8 @@ export default {
 
         // Get the raw house data
         const rawData = response.data.house;
-        console.log('Raw house data:', JSON.stringify(rawData, null, 2));
 
-        // Create a new object with ONLY the fields we need, keeping dates as strings
+
         const processedHouse = {
           _id: rawData._id,
           location: rawData.location || '',
@@ -279,7 +278,7 @@ export default {
           status: rawData.status || ''
         };
 
-        console.log('Processed house data:', JSON.stringify(processedHouse, null, 2));
+        
         
         // Assign to reactive ref
         house.value = processedHouse;
