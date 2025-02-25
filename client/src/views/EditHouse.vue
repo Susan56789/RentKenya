@@ -108,6 +108,85 @@
         </select>
       </div>
 
+      <!-- Status Select -->
+      <div class="space-y-1">
+        <label for="status" class="block text-sm font-medium text-gray-700">
+          Status
+        </label>
+        <select 
+          id="status"
+          v-model="formData.status"
+          required
+          class="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-gray-500 focus:border-gray-500"
+        >
+          <option value="available">Available</option>
+          <option value="sold">Sold</option>
+          <option value="not-available">Not Available</option>
+        </select>
+      </div>
+
+      <!-- Amenities Section -->
+      <div class="space-y-3 border border-gray-200 rounded-md p-4 bg-gray-50">
+        <h3 class="font-semibold text-lg text-gray-700">Amenities</h3>
+        
+        <!-- Internal Features -->
+        <div class="space-y-2">
+          <h4 class="font-medium text-gray-700">Internal Features</h4>
+          <div class="grid grid-cols-2 md:grid-cols-3 gap-2">
+            <div v-for="feature in amenitiesOptions.internal" :key="feature" class="flex items-center">
+              <input 
+                :id="'internal-' + feature"
+                type="checkbox"
+                :value="feature"
+                v-model="formData.amenities.internal"
+                class="h-4 w-4 text-gray-600 focus:ring-gray-500 border-gray-300 rounded"
+              />
+              <label :for="'internal-' + feature" class="ml-2 block text-sm text-gray-700">
+                {{ feature }}
+              </label>
+            </div>
+          </div>
+        </div>
+        
+        <!-- External Features -->
+        <div class="space-y-2">
+          <h4 class="font-medium text-gray-700">External Features</h4>
+          <div class="grid grid-cols-2 md:grid-cols-3 gap-2">
+            <div v-for="feature in amenitiesOptions.external" :key="feature" class="flex items-center">
+              <input 
+                :id="'external-' + feature"
+                type="checkbox"
+                :value="feature"
+                v-model="formData.amenities.external"
+                class="h-4 w-4 text-gray-600 focus:ring-gray-500 border-gray-300 rounded"
+              />
+              <label :for="'external-' + feature" class="ml-2 block text-sm text-gray-700">
+                {{ feature }}
+              </label>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Nearby Amenities -->
+        <div class="space-y-2">
+          <h4 class="font-medium text-gray-700">Nearby</h4>
+          <div class="grid grid-cols-2 md:grid-cols-3 gap-2">
+            <div v-for="feature in amenitiesOptions.nearby" :key="feature" class="flex items-center">
+              <input 
+                :id="'nearby-' + feature"
+                type="checkbox"
+                :value="feature"
+                v-model="formData.amenities.nearby"
+                class="h-4 w-4 text-gray-600 focus:ring-gray-500 border-gray-300 rounded"
+              />
+              <label :for="'nearby-' + feature" class="ml-2 block text-sm text-gray-700">
+                {{ feature }}
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Existing Photos -->
       <div v-if="formData.photos.length" class="space-y-2">
         <label class="block text-sm font-medium text-gray-700">
@@ -230,6 +309,44 @@ const HOUSE_TYPES = [
 
 const PURPOSES = ['Rent', 'Sale'];
 
+// Amenities options
+const AMENITIES_OPTIONS = {
+  internal: [
+    'Aircon',
+    'Alarm',
+    'Backup Generator',
+    'En Suite',
+    'Fibre Internet',
+    'Furnished',
+    'Serviced',
+    'Service Charge Included',
+    'Walk In Closet'
+  ],
+  external: [
+    'Balcony',
+    'BBQ',
+    'CCTV',
+    'Electric Fence',
+    'Borehole',
+    'Garden',
+    'Gym',
+    'Parking',
+    'Staff Quarters',
+    'Swimming Pool',
+    'Wheelchair Access',
+    'Gated Community',
+    'Kids Play Area'
+  ],
+  nearby: [
+    'Bus Stop',
+    'Golf Course',
+    'Hospital',
+    'Scenic View',
+    'School',
+    'Shopping Centre'
+  ]
+};
+
 const VALIDATION = {
   PHOTO_MAX_SIZE: 5 * 1024 * 1024, // 5MB
   VALID_PHOTO_TYPES: ['image/jpeg', 'image/jpg', 'image/png'],
@@ -259,7 +376,13 @@ export default {
       datePosted: '',
       type: '',
       purpose: '',
-      photos: []
+      status: 'available',
+      photos: [],
+      amenities: {
+        internal: [],
+        external: [],
+        nearby: []
+      }
     });
     const newPhotos = ref([]);
     const newPhotoPreviewUrls = ref([]);
@@ -276,7 +399,8 @@ export default {
         formData.value.price > 0 &&
         formData.value.datePosted &&
         formData.value.type &&
-        formData.value.purpose;
+        formData.value.purpose &&
+        formData.value.status;
 
       const hasMinPhotos = 
         (formData.value.photos.length + newPhotos.value.length - removedPhotoIndices.value.length) >= VALIDATION.MIN_PHOTOS;
@@ -418,6 +542,9 @@ export default {
         
         const house = response.data.house;
         if (!house) throw new Error('House data not found');
+        
+        // Get amenities from house with fallbacks
+        const amenities = house.amenities || { internal: [], external: [], nearby: [] };
 
         formData.value = {
           location: house.location || '',
@@ -425,7 +552,13 @@ export default {
           datePosted: formatDateForInput(house.datePosted),
           type: house.type || '',
           purpose: house.purpose || '',
-          photos: Array.isArray(house.photos) ? house.photos : []
+          status: house.status || 'available',
+          photos: Array.isArray(house.photos) ? house.photos : [],
+          amenities: {
+            internal: Array.isArray(amenities.internal) ? amenities.internal : [],
+            external: Array.isArray(amenities.external) ? amenities.external : [],
+            nearby: Array.isArray(amenities.nearby) ? amenities.nearby : []
+          }
         };
 
       } catch (err) {
@@ -469,10 +602,13 @@ export default {
 
         // Append basic fields
         Object.entries(formData.value).forEach(([key, value]) => {
-          if (key !== 'photos') {
+          if (key !== 'photos' && key !== 'amenities') {
             formDataObj.append(key, value.toString().trim());
           }
         });
+
+        // Append amenities as JSON string
+        formDataObj.append('amenities', JSON.stringify(formData.value.amenities));
 
         // Append new photos
         newPhotos.value.forEach(photo => {
@@ -559,6 +695,7 @@ export default {
       // Constants
       houseTypes: HOUSE_TYPES,
       purposes: PURPOSES,
+      amenitiesOptions: AMENITIES_OPTIONS,
       
       // Computed
       isFormValid,

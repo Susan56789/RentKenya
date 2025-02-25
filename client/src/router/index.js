@@ -67,7 +67,8 @@ const routes = [
     component: HouseDetails,
     props: true,
     meta: {
-      title: 'House Details'
+      title: 'House Details',
+      dynamicTitle: true  // Flag to indicate this route has a dynamic title
     }
   },
   {
@@ -99,7 +100,7 @@ const routes = [
 ];
 
 const router = createRouter({
-  history: createWebHistory('/'),  
+  history: createWebHistory('/'),
   routes,
   scrollBehavior(to, from, savedPosition) {
     if (savedPosition) {
@@ -118,7 +119,7 @@ router.beforeEach((to, from, next) => {
   const isAuthenticated = localStorage.getItem('token'); // Replace with your auth check
   
   if (to.meta.requiresAuth && !isAuthenticated) {
-    next({ 
+    next({
       name: 'Login',
       query: { redirect: to.fullPath }
     });

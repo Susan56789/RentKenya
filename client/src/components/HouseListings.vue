@@ -24,6 +24,89 @@
             <option value="Rent">Rent</option>
             <option value="Sale">Sale</option>
           </select>
+          
+          <!-- Amenities Filter Dropdown -->
+          <div class="relative" ref="amenitiesDropdown">
+            <button 
+              type="button"
+              @click="isAmenitiesDropdownOpen = !isAmenitiesDropdownOpen"
+              class="px-3 py-2 border rounded-md text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-gray-400 flex items-center gap-2"
+            >
+              <span>Amenities</span>
+              <span v-if="selectedAmenitiesCount > 0" class="bg-gray-200 text-xs px-2 py-0.5 rounded-full">
+                {{ selectedAmenitiesCount }}
+              </span>
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            
+            <!-- Dropdown Content -->
+            <div 
+              v-if="isAmenitiesDropdownOpen"
+              class="absolute top-full mt-1 left-0 z-10 w-64 p-4 bg-white shadow-lg rounded-md border border-gray-200"
+            >
+              <!-- Amenities Categories Tabs -->
+              <div class="flex border-b border-gray-200 mb-3">
+                <button
+                  v-for="(label, category) in amenitiesCategories"
+                  :key="category"
+                  type="button"
+                  @click="activeAmenitiesCategory = category"
+                  class="px-3 py-1 text-sm font-medium border-b-2 transition-colors"
+                  :class="activeAmenitiesCategory === category 
+                    ? 'border-gray-800 text-gray-800' 
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                >
+                  {{ label }}
+                </button>
+              </div>
+              
+              <!-- Amenities Checkboxes -->
+              <div class="max-h-52 overflow-y-auto">
+                <div class="space-y-1">
+                  <div 
+                    v-for="amenity in amenitiesOptions[activeAmenitiesCategory]"
+                    :key="amenity"
+                    class="flex items-center"
+                  >
+                    <input
+                      :id="`filter-${activeAmenitiesCategory}-${amenity}`"
+                      type="checkbox"
+                      :value="amenity"
+                      v-model="selectedAmenities[activeAmenitiesCategory]"
+                      class="h-4 w-4 text-gray-600 focus:ring-gray-500 border-gray-300 rounded"
+                      @change="fetchListings"
+                    />
+                    <label 
+                      :for="`filter-${activeAmenitiesCategory}-${amenity}`"
+                      class="ml-2 block text-sm text-gray-700"
+                    >
+                      {{ amenity }}
+                    </label>
+                  </div>
+                </div>
+              </div>
+              
+              <!-- Actions -->
+              <div class="flex justify-between pt-3 mt-3 border-t border-gray-200">
+                <button
+                  type="button"
+                  @click="clearAmenityFilters"
+                  class="text-xs text-gray-600 hover:text-gray-800"
+                >
+                  Clear All
+                </button>
+                <button
+                  type="button"
+                  @click="isAmenitiesDropdownOpen = false"
+                  class="text-xs text-gray-600 hover:text-gray-800"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
 
           <router-link
             to="/add-house"
@@ -152,8 +235,37 @@
               <span class="font-medium">KSh {{ formatPrice(listing.price) }}</span>
               <span v-if="listing.purpose === 'Rent'">/month</span>
             </div>
+            
+            <!-- Amenities Pills -->
+            <div v-if="hasAmenities(listing)" class="mt-3 flex flex-wrap gap-1">
+              <span 
+                v-for="(amenity, index) in getTopAmenities(listing)" 
+                :key="index"
+                class="px-2 py-0.5 bg-gray-100 text-gray-700 text-xs rounded-full"
+              >
+                {{ amenity }}
+              </span>
+              <span 
+                v-if="countTotalAmenities(listing) > 3" 
+                class="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded-full"
+              >
+                +{{ countTotalAmenities(listing) - 3 }} more
+              </span>
+            </div>
 
             <div class="mt-4 flex justify-end space-x-3">
+              <router-link
+                :to="`/house/${listing._id}`"
+                class="px-3 py-1 text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1"
+              >
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round"
+                   stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path stroke-linecap="round" stroke-linejoin="round" 
+                  stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                </svg>
+                View
+              </router-link>
               <router-link
                 :to="`/edit-house/${listing._id}`"
                 class="px-3 py-1 text-sm text-gray-600 hover:text-gray-800 flex items-center gap-1"
@@ -208,7 +320,7 @@
 </template>
 
 <script>
-import { ref, reactive, onMounted, watch } from 'vue';
+import { ref, reactive, onMounted, watch, computed, onBeforeUnmount, nextTick } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuth } from '@/composables/useAuth';
 import axios from 'axios';
@@ -222,6 +334,50 @@ const HOUSE_TYPES = [
   'Four Bedroom',
   'Five Bedroom'
 ];
+
+// Amenities Constants
+const AMENITIES_OPTIONS = {
+  internal: [
+    'Aircon',
+    'Alarm',
+    'Backup Generator',
+    'En Suite',
+    'Fibre Internet',
+    'Furnished',
+    'Serviced',
+    'Service Charge Included',
+    'Walk In Closet'
+  ],
+  external: [
+    'Balcony',
+    'BBQ',
+    'CCTV',
+    'Electric Fence',
+    'Borehole',
+    'Garden',
+    'Gym',
+    'Parking',
+    'Staff Quarters',
+    'Swimming Pool',
+    'Wheelchair Access',
+    'Gated Community',
+    'Kids Play Area'
+  ],
+  nearby: [
+    'Bus Stop',
+    'Golf Course',
+    'Hospital',
+    'Scenic View',
+    'School',
+    'Shopping Centre'
+  ]
+};
+
+const AMENITIES_CATEGORIES = {
+  internal: 'Internal',
+  external: 'External',
+  nearby: 'Nearby'
+};
 
 // Date validation utility
 const isValidDate = (dateValue) => {
@@ -251,12 +407,42 @@ export default {
     const showDeleteModal = ref(false);
     const selectedListingId = ref(null);
     const isDeleting = ref(false);
-    const filters = reactive({ type: '', purpose: '' });
-
+    const filters = reactive({ 
+      type: '', 
+      purpose: '',
+    });
+    
+    // Amenities dropdown state
+    const amenitiesDropdown = ref(null);
+    const isAmenitiesDropdownOpen = ref(false);
+    const activeAmenitiesCategory = ref('internal');
+    const selectedAmenities = reactive({
+      internal: [],
+      external: [],
+      nearby: []
+    });
+    
     // API Configuration
     const apiBaseUrl = process.env.NODE_ENV === 'production' 
       ? 'https://rentkenya.onrender.com' 
       : 'http://localhost:5000';
+    
+    // Computed values
+    const selectedAmenitiesCount = computed(() => {
+      return selectedAmenities.internal.length + 
+             selectedAmenities.external.length + 
+             selectedAmenities.nearby.length;
+    });
+    
+    // Combined amenities list for API
+    const amenitiesForApi = computed(() => {
+      const allAmenities = [
+        ...selectedAmenities.internal,
+        ...selectedAmenities.external,
+        ...selectedAmenities.nearby
+      ];
+      return allAmenities.length > 0 ? allAmenities.join(',') : null;
+    });
 
     // Fetch Listings with date sanitization
     const fetchListings = async () => {
@@ -273,6 +459,11 @@ export default {
         const params = new URLSearchParams();
         if (filters.type) params.append('type', filters.type);
         if (filters.purpose) params.append('purpose', filters.purpose);
+        
+        // Add amenities filter if any are selected
+        if (amenitiesForApi.value) {
+          params.append('amenity', amenitiesForApi.value);
+        }
 
         const response = await axios.get(
           `${apiBaseUrl}/api/houses/my-listings${params.toString() ? `?${params.toString()}` : ''}`,
@@ -345,6 +536,56 @@ export default {
     const setPhotoIndex = (listingId, index) => {
       currentPhotoIndices.value[listingId] = index;
       loadedImages.value[listingId] = false;
+    };
+    
+    // Amenities helper functions
+    const hasAmenities = (listing) => {
+      if (!listing.amenities) return false;
+      
+      return (
+        Array.isArray(listing.amenities.internal) && listing.amenities.internal.length > 0 ||
+        Array.isArray(listing.amenities.external) && listing.amenities.external.length > 0 ||
+        Array.isArray(listing.amenities.nearby) && listing.amenities.nearby.length > 0
+      );
+    };
+    
+    const countTotalAmenities = (listing) => {
+      if (!listing.amenities) return 0;
+      
+      return (
+        (Array.isArray(listing.amenities.internal) ? listing.amenities.internal.length : 0) +
+        (Array.isArray(listing.amenities.external) ? listing.amenities.external.length : 0) +
+        (Array.isArray(listing.amenities.nearby) ? listing.amenities.nearby.length : 0)
+      );
+    };
+    
+    const getTopAmenities = (listing) => {
+      if (!listing.amenities) return [];
+      
+      // Combine all amenities
+      const allAmenities = [
+        ...(Array.isArray(listing.amenities.internal) ? listing.amenities.internal : []),
+        ...(Array.isArray(listing.amenities.external) ? listing.amenities.external : []),
+        ...(Array.isArray(listing.amenities.nearby) ? listing.amenities.nearby : [])
+      ];
+      
+      // Return up to 3 amenities
+      return allAmenities.slice(0, 3);
+    };
+    
+    // Clear all amenity filters
+    const clearAmenityFilters = () => {
+      selectedAmenities.internal = [];
+      selectedAmenities.external = [];
+      selectedAmenities.nearby = [];
+      fetchListings();
+    };
+    
+    // Close dropdown when clicking outside
+    const handleClickOutside = (event) => {
+      if (amenitiesDropdown.value && !amenitiesDropdown.value.contains(event.target)) {
+        isAmenitiesDropdownOpen.value = false;
+      }
     };
 
     // Delete Functionality with date handling
@@ -419,12 +660,22 @@ export default {
       } else {
         router.push('/login');
       }
+      
+      // Add click outside listener
+      document.addEventListener('mousedown', handleClickOutside);
+    });
+    
+    // Remove event listener on component unmount
+    onBeforeUnmount(() => {
+      document.removeEventListener('mousedown', handleClickOutside);
     });
 
     // Watch for filter changes
-    watch(filters, () => {
+    watch([filters, amenitiesForApi], () => {
       if (auth.isAuthenticated()) {
-        fetchListings();
+        nextTick(() => {
+          fetchListings();
+        });
       }
     });
 
@@ -440,6 +691,19 @@ export default {
       selectedListingId,
       filters,
       houseTypes: HOUSE_TYPES,
+      
+      // Amenities
+      amenitiesOptions: AMENITIES_OPTIONS,
+      amenitiesCategories: AMENITIES_CATEGORIES,
+      isAmenitiesDropdownOpen,
+      amenitiesDropdown,
+      activeAmenitiesCategory,
+      selectedAmenities,
+      selectedAmenitiesCount,
+      hasAmenities,
+      countTotalAmenities,
+      getTopAmenities,
+      clearAmenityFilters,
 
       // Functions
       getListingImageSrc,
@@ -451,8 +715,8 @@ export default {
       confirmDelete,
       deleteListing,
       formatPrice,
-      formatDate, // New utility function
-      isValidDate  // Exposed for template usage if needed
+      formatDate,
+      isValidDate
     };
   }
 };

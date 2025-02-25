@@ -97,7 +97,7 @@
 
         <!-- Basic Info -->
         <div class="mb-6">
-          <h1 class="text-3xl font-bold text-gray-900">{{ house.type }}</h1>
+          <h1 class="text-3xl font-bold text-gray-900">{{ house.type }} in {{ house.location }}</h1>
           <div class="flex items-center gap-2 mt-2 text-gray-600">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
@@ -122,8 +122,64 @@
           </div>
         </div>
 
+        <!-- Amenities Section -->
+        <div v-if="hasAmenities" class="mb-8 border-t border-gray-200 pt-6">
+          <h2 class="text-xl font-semibold mb-4">Amenities</h2>
+          
+          <!-- Internal Features -->
+          <div v-if="house.amenities?.internal?.length" class="mb-4">
+            <h3 class="text-lg font-medium text-gray-700 mb-2">Internal Features</h3>
+            <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+              <div 
+                v-for="feature in house.amenities.internal" 
+                :key="feature"
+                class="flex items-center gap-2"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-green-500" viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                </svg>
+                <span>{{ feature }}</span>
+              </div>
+            </div>
+          </div>
+          
+          <!-- External Features -->
+          <div v-if="house.amenities?.external?.length" class="mb-4">
+            <h3 class="text-lg font-medium text-gray-700 mb-2">External Features</h3>
+            <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+              <div 
+                v-for="feature in house.amenities.external" 
+                :key="feature"
+                class="flex items-center gap-2"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-green-500" viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                </svg>
+                <span>{{ feature }}</span>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Nearby Features -->
+          <div v-if="house.amenities?.nearby?.length" class="mb-4">
+            <h3 class="text-lg font-medium text-gray-700 mb-2">Nearby</h3>
+            <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+              <div 
+                v-for="feature in house.amenities.nearby" 
+                :key="feature"
+                class="flex items-center gap-2"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-green-500" viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                </svg>
+                <span>{{ feature }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- Dates -->
-        <div class="grid grid-cols-2 gap-4 mb-6 text-sm">
+        <div class="grid grid-cols-2 gap-4 mb-6 text-sm border-t border-gray-200 pt-6">
           <div>
             <p class="text-gray-600">Created</p>
             <p class="text-gray-800">{{ formatDate(house.createdAt) }}</p>
@@ -180,7 +236,7 @@
 </template>
 
 <script>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted,watch } from 'vue';
 import { useRoute } from 'vue-router';
 import axios from 'axios';
 
@@ -202,6 +258,17 @@ export default {
     const getHouseImageSrc = computed(() => {
       if (!house.value?.photos?.length) return '/placeholder-house.png';
       return `${apiBaseUrl}/api/houses/image/${house.value._id}/${currentPhotoIndex.value}`;
+    });
+
+    // Check if property has any amenities
+    const hasAmenities = computed(() => {
+      if (!house.value?.amenities) return false;
+      
+      return (
+        (Array.isArray(house.value.amenities.internal) && house.value.amenities.internal.length > 0) ||
+        (Array.isArray(house.value.amenities.external) && house.value.amenities.external.length > 0) ||
+        (Array.isArray(house.value.amenities.nearby) && house.value.amenities.nearby.length > 0)
+      );
     });
 
     const formatPrice = (price) => {
@@ -242,60 +309,84 @@ export default {
       imageLoading.value = false;
     };
 
-    const fetchHouseDetails = async () => {
-      loading.value = true;
-      error.value = null;
-      
-      try {
-        
-        
-        const response = await axios.get(`${apiBaseUrl}/api/houses/${route.params.id}`);
-        
-        
-        if (!response.data?.house) {
-          throw new Error('House data not found');
-        }
-
-        // Get the raw house data
-        const rawData = response.data.house;
+    const updateDocumentTitle = () => {
+  if (house.value && house.value.type && house.value.location) {
+    const dynamicTitle = `${house.value.type} in ${house.value.location}`;
+    document.title = `${dynamicTitle} - RentKenya`;
+  }
+};
 
 
-        const processedHouse = {
-          _id: rawData._id,
-          location: rawData.location || '',
-          price: Number(rawData.price) || 0,
-          datePosted: String(rawData.datePosted || ''),
-          type: rawData.type || '',
-          purpose: rawData.purpose || '',
-          photos: Array.isArray(rawData.photos) ? rawData.photos : [],
-          seller: {
-            id: rawData.seller?.id || '',
-            name: rawData.seller?.name || '',
-            email: rawData.seller?.email || '',
-            phone: rawData.seller?.phone || ''
-          },
-          createdAt: String(rawData.createdAt || ''),
-          status: rawData.status || ''
-        };
+const fetchHouseDetails = async () => {
+  loading.value = true;
+  error.value = null;
+  
+  try {
+    const response = await axios.get(`${apiBaseUrl}/api/houses/${route.params.id}`);
+    
+    if (!response.data?.house) {
+      throw new Error('House data not found');
+    }
 
-        
-        
-        // Assign to reactive ref
-        house.value = processedHouse;
-        imageLoading.value = true;
+    // Get the raw house data
+    const rawData = response.data.house;
 
-      } catch (err) {
-        console.error('Detailed error:', {
-          message: err.message,
-          stack: err.stack,
-          data: err.response?.data
-        });
-        error.value = 'Failed to load house details. Please try again later.';
-        house.value = null;
-      } finally {
-        loading.value = false;
-      }
+    // Process amenities data
+    const amenities = rawData.amenities || {
+      internal: [],
+      external: [],
+      nearby: []
     };
+
+    const processedHouse = {
+      _id: rawData._id,
+      location: rawData.location || '',
+      price: Number(rawData.price) || 0,
+      datePosted: String(rawData.datePosted || ''),
+      type: rawData.type || '',
+      purpose: rawData.purpose || '',
+      photos: Array.isArray(rawData.photos) ? rawData.photos : [],
+      amenities: {
+        internal: Array.isArray(amenities.internal) ? amenities.internal : [],
+        external: Array.isArray(amenities.external) ? amenities.external : [],
+        nearby: Array.isArray(amenities.nearby) ? amenities.nearby : []
+      },
+      seller: {
+        id: rawData.seller?.id || '',
+        name: rawData.seller?.name || '',
+        email: rawData.seller?.email || '',
+        phone: rawData.seller?.phone || ''
+      },
+      createdAt: String(rawData.createdAt || ''),
+      updatedAt: String(rawData.updatedAt || ''),
+      status: rawData.status || ''
+    };
+    
+    // Assign to reactive ref
+    house.value = processedHouse;
+    imageLoading.value = true;
+    
+    // Update the document title with the house type and location
+    updateDocumentTitle();
+
+  } catch (err) {
+    console.error('Detailed error:', {
+      message: err.message,
+      stack: err.stack,
+      data: err.response?.data
+    });
+    error.value = 'Failed to load house details. Please try again later.';
+    house.value = null;
+  } finally {
+    loading.value = false;
+  }
+};
+
+watch(() => house.value, (newHouse) => {
+  if (newHouse) {
+    updateDocumentTitle();
+  }
+}, { deep: true });
 
     onMounted(fetchHouseDetails);
 
@@ -305,6 +396,7 @@ export default {
       error,
       currentPhotoIndex,
       imageLoading,
+      hasAmenities,
       getHouseImageSrc,
       formatPrice,
       formatDate,

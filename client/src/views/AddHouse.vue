@@ -73,6 +73,68 @@
         </select>
       </div>
 
+      <!-- Amenities Section -->
+      <div class="space-y-3 border border-gray-200 rounded-md p-4 bg-gray-50">
+        <h3 class="font-semibold text-lg text-gray-700">Amenities</h3>
+        
+        <!-- Internal Features -->
+        <div class="space-y-2">
+          <h4 class="font-medium text-gray-700">Internal Features</h4>
+          <div class="grid grid-cols-2 md:grid-cols-3 gap-2">
+            <div v-for="feature in amenitiesOptions.internal" :key="feature" class="flex items-center">
+              <input 
+                :id="'internal-' + feature"
+                type="checkbox"
+                :value="feature"
+                v-model="amenities.internal"
+                class="h-4 w-4 text-gray-600 focus:ring-gray-500 border-gray-300 rounded"
+              />
+              <label :for="'internal-' + feature" class="ml-2 block text-sm text-gray-700">
+                {{ feature }}
+              </label>
+            </div>
+          </div>
+        </div>
+        
+        <!-- External Features -->
+        <div class="space-y-2">
+          <h4 class="font-medium text-gray-700">External Features</h4>
+          <div class="grid grid-cols-2 md:grid-cols-3 gap-2">
+            <div v-for="feature in amenitiesOptions.external" :key="feature" class="flex items-center">
+              <input 
+                :id="'external-' + feature"
+                type="checkbox"
+                :value="feature"
+                v-model="amenities.external"
+                class="h-4 w-4 text-gray-600 focus:ring-gray-500 border-gray-300 rounded"
+              />
+              <label :for="'external-' + feature" class="ml-2 block text-sm text-gray-700">
+                {{ feature }}
+              </label>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Nearby Amenities -->
+        <div class="space-y-2">
+          <h4 class="font-medium text-gray-700">Nearby</h4>
+          <div class="grid grid-cols-2 md:grid-cols-3 gap-2">
+            <div v-for="feature in amenitiesOptions.nearby" :key="feature" class="flex items-center">
+              <input 
+                :id="'nearby-' + feature"
+                type="checkbox"
+                :value="feature"
+                v-model="amenities.nearby"
+                class="h-4 w-4 text-gray-600 focus:ring-gray-500 border-gray-300 rounded"
+              />
+              <label :for="'nearby-' + feature" class="ml-2 block text-sm text-gray-700">
+                {{ feature }}
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Photo Upload -->
       <div class="space-y-2">
         <label for="photos" class="block text-sm font-medium text-gray-700">
@@ -91,26 +153,26 @@
         <p v-if="photoError" class="text-sm text-red-500 mt-1">{{ photoError }}</p>
 
          
-    <!-- Photo Previews -->
-    <div v-if="photoPreviewUrls.length > 0" class="grid grid-cols-3 gap-2 mt-2">
-      <div v-for="(url, index) in photoPreviewUrls" :key="index" class="relative group">
-        <img 
-          :src="url"
-          :alt="'Preview ' + (index + 1)"
-          class="w-full h-24 object-cover rounded-md"
-        />
-        <button 
-          type="button"
-          @click="removePhoto(index)"
-          class="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
+        <!-- Photo Previews -->
+        <div v-if="photoPreviewUrls.length > 0" class="grid grid-cols-3 gap-2 mt-2">
+          <div v-for="(url, index) in photoPreviewUrls" :key="index" class="relative group">
+            <img 
+              :src="url"
+              :alt="'Preview ' + (index + 1)"
+              class="w-full h-24 object-cover rounded-md"
+            />
+            <button 
+              type="button"
+              @click="removePhoto(index)"
+              class="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
       </div>
-    </div>
-  </div>
 
       <!-- Submit Button -->
       <button
@@ -161,6 +223,44 @@ const HOUSE_TYPES = [
 
 const PURPOSES = ['Rent', 'Sale'];
 
+// Amenities options
+const AMENITIES_OPTIONS = {
+  internal: [
+    'Aircon',
+    'Alarm',
+    'Backup Generator',
+    'En Suite',
+    'Fibre Internet',
+    'Furnished',
+    'Serviced',
+    'Service Charge Included',
+    'Walk In Closet'
+  ],
+  external: [
+    'Balcony',
+    'BBQ',
+    'CCTV',
+    'Electric Fence',
+    'Borehole',
+    'Garden',
+    'Gym',
+    'Parking',
+    'Staff Quarters',
+    'Swimming Pool',
+    'Wheelchair Access',
+    'Gated Community',
+    'Kids Play Area'
+  ],
+  nearby: [
+    'Bus Stop',
+    'Golf Course',
+    'Hospital',
+    'Scenic View',
+    'School',
+    'Shopping Centre'
+  ]
+};
+
 const VALIDATION = {
   PHOTO_MAX_SIZE: 5 * 1024 * 1024, // 5MB
   VALID_PHOTO_TYPES: ['image/jpeg', 'image/jpg', 'image/png'],
@@ -183,6 +283,13 @@ export default {
       datePosted: new Date().toISOString().split('T')[0],
       type: '',
       purpose: '',
+    });
+
+    // Amenities state
+    const amenities = reactive({
+      internal: [],
+      external: [],
+      nearby: []
     });
 
     const photos = ref([]);
@@ -317,6 +424,9 @@ export default {
           formPayload.append(key, value.toString().trim());
         });
 
+        // Append amenities as JSON string
+        formPayload.append('amenities', JSON.stringify(amenities));
+
         // Append photos
         photos.value.forEach(photo => {
           formPayload.append('photos', photo);
@@ -333,6 +443,13 @@ export default {
         formData.price = '';
         formData.type = '';
         formData.purpose = '';
+        
+        // Reset amenities
+        amenities.internal = [];
+        amenities.external = [];
+        amenities.nearby = [];
+        
+        // Reset photos
         photos.value = [];
         photoPreviewUrls.value.forEach(url => URL.revokeObjectURL(url));
         photoPreviewUrls.value = [];
@@ -381,6 +498,8 @@ export default {
       fileInput,
       houseTypes: HOUSE_TYPES,
       purposes: PURPOSES,
+      amenitiesOptions: AMENITIES_OPTIONS,
+      amenities,
       isFormValid,
       handleFileUpload,
       removePhoto,
