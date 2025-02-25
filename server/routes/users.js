@@ -5,6 +5,8 @@ const { ObjectId } = require('mongodb');
 const auth = require('../middleware/auth');
 const crypto = require('crypto');
 const rateLimit = require('express-rate-limit');
+const { OAuth2Client } = require('google-auth-library');
+
 
 const router = express.Router();
 
@@ -36,10 +38,190 @@ const isStrongPassword = (password) => {
            hasSpecialChar;
 };
 
+// Initialize Google OAuth client
+const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+
+// Google Login Route
+router.post('/google-login', async (req, res) => {
+    const { token } = req.body;
+
+    if (!token) {
+        return res.status(400).json({ message: 'Google token is required' });
+    }
+
+    try {
+        // Verify Google ID token
+        const ticket = await googleClient.verifyIdToken({
+            idToken: token,
+            audience: process.env.GOOGLE_CLIENT_ID
+        });
+
+        const payload = ticket.getPayload();
+        const { email, name, sub: googleId, picture: avatarUrl } = payload;
+
+        if (!email) {
+            return res.status(400).json({ message: 'Email not found in Google profile' });
+        }
+
+        const normalizedEmail = email.toLowerCase().trim();
+
+        // Check if user exists
+        let user = await req.app.locals.users.findOne({ 
+            $or: [
+                { email: normalizedEmail },
+                { 'googleAuth.googleId': googleId }
+            ]
+        });
+
+        // If user doesn't exist, create a new user
+        if (!user) {
+            const newUser = {
+                username: name.replace(/\s+/g, '_').toLowerCase() + '_' + googleId.slice(-4),
+                email: normalizedEmail,
+                password: null, // No password for Google users
+                createdAt: new Date(),
+                avatarUrl,
+                googleAuth: {
+                    googleId,
+                    email: normalizedEmail
+                },
+                accountVerified: true,
+                lastLoginAt: new Date()
+            };
+
+            const result = await req.app.locals.users.insertOne(newUser);
+            
+            if (!result.acknowledged) {
+                throw new Error('User insertion failed');
+            }
+
+            user = await req.app.locals.users.findOne({ _id: result.insertedId });
+        } else {
+            // Update last login for existing user
+            await req.app.locals.users.updateOne(
+                { _id: user._id },
+                { 
+                    $set: { 
+                        lastLoginAt: new Date(),
+                        'googleAuth.email': normalizedEmail,
+                        avatarUrl
+                    }
+                }
+            );
+        }
+
+        // Generate JWT token
+        const jwtToken = jwt.sign(
+            { 
+                userId: user._id, 
+                email: user.email,
+                version: user.lastPasswordChange || new Date()
+            },
+            process.env.JWT_SECRET,
+            { 
+                expiresIn: '1h',
+                algorithm: 'HS256'
+            }
+        );
+
+        res.json({
+            token: jwtToken,
+            user: {
+                id: user._id,
+                email: user.email,
+                username: user.username,
+                avatarUrl: user.avatarUrl
+            }
+        });
+
+    } catch (error) {
+        console.error('Google Login Error:', error);
+        
+        // Detailed error logging
+        if (error.name === 'TokenExpiredError') {
+            return res.status(401).json({ message: 'Google token has expired' });
+        }
+        
+        if (error.name === 'JsonWebTokenError') {
+            return res.status(401).json({ message: 'Invalid Google token' });
+        }
+
+        res.status(500).json({ message: 'Error processing Google login' });
+    }
+});
+
 // Register User
 router.post('/register', registrationLimiter, async (req, res) => {
-    const { username, email, password, phoneNumber } = req.body;
+    const { username, email, password, phoneNumber, googleId, name, avatarUrl } = req.body;
     
+    // Google Registration Flow
+    if (googleId) {
+        // Validate required fields for Google registration
+        if (!email?.trim() || !googleId) {
+            return res.status(400).json({ message: 'Email and Google ID are required' });
+        }
+
+        // Validate email format
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+            return res.status(400).json({ message: 'Invalid email format' });
+        }
+
+        try {
+            const normalizedEmail = email.toLowerCase().trim();
+            
+            // Check if user already exists
+            const existingUser = await req.app.locals.users.findOne({
+                $or: [
+                    { email: normalizedEmail },
+                    { 'googleAuth.googleId': googleId }
+                ]
+            });
+
+            if (existingUser) {
+                return res.status(409).json({ message: 'User with this email or Google account already exists' });
+            }
+
+            // Generate a unique username if not provided
+            const sanitizedUsername = username?.trim() || 
+                (name ? name.replace(/\s+/g, '_').toLowerCase() + '_' + googleId.slice(-4) : 
+                normalizedEmail.split('@')[0] + '_' + googleId.slice(-4));
+
+            const user = {
+                username: sanitizedUsername,
+                email: normalizedEmail,
+                password: null, // No password for Google users
+                phoneNumber: phoneNumber?.trim() || '',
+                createdAt: new Date(),
+                lastPasswordChange: new Date(),
+                googleAuth: {
+                    googleId,
+                    email: normalizedEmail
+                },
+                avatarUrl: avatarUrl || null,
+                accountVerified: true,
+                failedLoginAttempts: 0,
+                accountLocked: false
+            };
+
+            const result = await req.app.locals.users.insertOne(user);
+            
+            if (!result.acknowledged) {
+                throw new Error('User insertion failed');
+            }
+
+            return res.status(201).json({
+                message: 'User registered successfully',
+                userId: result.insertedId
+            });
+
+        } catch (error) {
+            console.error('Google Registration Error:', error);
+            return res.status(500).json({ message: 'Error registering Google user' });
+        }
+    }
+
+    // Standard Registration Flow
     if (!username?.trim() || !email?.trim() || !password) {
         return res.status(400).json({ message: 'Username, email, and password are required' });
     }
