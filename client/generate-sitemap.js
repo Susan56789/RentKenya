@@ -3,11 +3,11 @@ const path = require('path');
 const axios = require('axios');
 const { format } = require('date-fns');
 
-// Configuration
+// Configuration without fallback IDs
 const config = {
-  siteUrl: 'https://rent254.onrender.com',
-  apiUrl: 'https://rentkenya.onrender.com/api/houses',
-  outputDir: path.join(process.cwd(), 'public'),
+  siteUrl: process.env.SITE_URL || 'https://rent254.onrender.com',
+  apiUrl: process.env.API_URL || 'https://rentkenya.onrender.com/api/houses',
+  outputDir: process.env.OUTPUT_DIR || path.join(process.cwd(), 'public'),
   staticRoutes: [
     {
       url: '/',
@@ -38,25 +38,20 @@ const config = {
       noindex: true
     }
   ],
-  // Fallback house IDs to use if API fails
-  fallbackHouseIds: [
-    '65c5b89e4aad9a5db1b2e4a1',
-    '65c5b8c04aad9a5db1b2e4a2',
-    '65c5b8d14aad9a5db1b2e4a3',
-    '65c5b8e24aad9a5db1b2e4a4',
-    '65c5b8f34aad9a5db1b2e4a5'
-  ]
+  apiTimeout: 20000,  // 20 seconds
+  apiRetries: 3,
+  debug: true
 };
 
 class SitemapGenerator {
   constructor(config) {
     this.config = config;
     this.xmlUrls = [];
-    this.debug = true;
+    this.debug = config.debug;
   }
 
   log(message) {
-    console.log(`[INFO] ${message}`);
+    if (this.debug) console.log(`[INFO] ${message}`);
   }
 
   warn(message) {
@@ -108,7 +103,7 @@ class SitemapGenerator {
     this.log(`Fetching houses from API: ${this.config.apiUrl}`);
     try {
       const response = await axios.get(this.config.apiUrl, {
-        timeout: 15000,
+        timeout: this.config.apiTimeout,
         headers: {
           'Accept': 'application/json',
           'User-Agent': 'SitemapGenerator/1.0'
@@ -116,7 +111,7 @@ class SitemapGenerator {
       });
 
       // Print raw response for debugging
-      console.log('Raw API Response:', JSON.stringify(response.data).substring(0, 500) + '...');
+      this.log('Raw API Response: ' + JSON.stringify(response.data).substring(0, 500) + '...');
 
       let houses = [];
 
@@ -144,27 +139,28 @@ class SitemapGenerator {
         }
       }
 
-      // If we still have no houses, use fallback
+      // Strict validation - throw error if no houses found
       if (!houses || houses.length === 0) {
-        this.warn('No houses found in API response, using fallback IDs');
-        return this.createFallbackHouses();
+        throw new Error('No houses found in API response');
       }
 
       this.log(`Found ${houses.length} houses in API response`);
       
-      // Ensure houses have valid IDs
+      // Strict house validation
       const validHouses = houses.filter(house => {
-        // Try to find ID field
-        return house && (house._id || house.id || house.houseId || house.house_id);
+        // Ensure house has a valid ID and required fields
+        return house && 
+               (house._id || house.id || house.houseId || house.house_id) &&
+               (house.updatedAt || house.createdAt || house.updated_at || house.created_at);
       });
 
+      // Throw error if no valid houses
       if (validHouses.length === 0) {
-        this.warn('No houses with valid IDs found in API response, using fallback IDs');
-        return this.createFallbackHouses();
+        throw new Error('No houses with valid IDs and dates found');
       }
 
       return validHouses.map(house => {
-        // Normalize ID field
+        // Normalize ID and date fields
         const id = house._id || house.id || house.houseId || house.house_id;
         return {
           _id: id,
@@ -173,19 +169,9 @@ class SitemapGenerator {
         };
       });
     } catch (error) {
-      this.error('Error fetching house listings:', error.message);
-      return this.createFallbackHouses();
+      this.error('Error fetching house listings:', error);
+      throw error; // Rethrow to be handled by caller
     }
-  }
-
-  createFallbackHouses() {
-    this.warn('Using fallback house IDs');
-    // Create house objects from fallback IDs
-    return this.config.fallbackHouseIds.map(id => ({
-      _id: id,
-      updatedAt: new Date(),
-      createdAt: new Date()
-    }));
   }
 
   validateUrl(url) {
@@ -348,26 +334,6 @@ Sitemap: ${sitemapUrl}`;
   const generator = new SitemapGenerator(config);
   
   try {
-    // Try a direct API call first to debug
-    console.log('Testing API directly...');
-    let apiTest;
-    try {
-      apiTest = await axios.get(config.apiUrl, {
-        timeout: 10000,
-        headers: {'Accept': 'application/json'}
-      });
-      console.log('API Test Status:', apiTest.status);
-      console.log('Response type:', typeof apiTest.data);
-      if (typeof apiTest.data === 'object') {
-        console.log('Response keys:', Object.keys(apiTest.data));
-        // Print a sample of the data
-        console.log('Data sample:', JSON.stringify(apiTest.data).substring(0, 300) + '...');
-      }
-    } catch (err) {
-      console.error('API test failed:', err.message);
-    }
-    
-    // Now generate the sitemap
     await generator.generate();
   } catch (error) {
     console.error('\nFailed to generate SEO files:', error);
