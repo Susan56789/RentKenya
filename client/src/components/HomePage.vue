@@ -121,96 +121,229 @@
         </button>
       </div>
 
-      <!-- House Listings -->
-      <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-        <div
-          v-for="house in houses"
-          :key="house._id"
-          class="bg-white shadow rounded-lg overflow-hidden hover:shadow-lg transition-shadow"
-        >
-          <!-- Image Section -->
-          <div class="relative h-48">
-            <img
-              :src="getHouseImageSrc(house._id)"
-              :alt="house.location"
-              class="h-full w-full object-cover"
-              @load="handleImageLoad(house._id)"
-              @error="handleImageError($event, house._id)"
-            />
-            
-            <!-- Loading Overlay -->
-            <div 
-              v-if="!loadedImages[house._id]" 
-              class="absolute inset-0 bg-gray-100 flex items-center justify-center"
-            >
-              <div class="w-8 h-8 border-4 border-gray-300 border-t-gray-600 rounded-full animate-spin"></div>
-            </div>
-
-            <!-- Image Navigation -->
-            <div 
-              v-if="loadedImages[house._id] && house.photos?.length > 1" 
-              class="absolute inset-0 flex items-center justify-between px-2"
-            >
-              <button 
-                @click="changePhoto(house._id, -1)"
-                class="p-1 bg-black bg-opacity-50 text-white rounded-full hover:bg-opacity-75"
+      <!-- House Listings with Fixed 4-per-row Layout -->
+      <div v-else>
+        <!-- Grid Layout - 4 per row on larger screens -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div
+            v-for="house in paginatedHouses"
+            :key="house._id"
+            class="bg-white shadow rounded-lg overflow-hidden hover:shadow-lg transition-shadow"
+          >
+            <!-- Image Section -->
+            <div class="relative h-48">
+              <img
+                :src="getHouseImageSrc(house._id)"
+                :alt="house.location"
+                class="h-full w-full object-cover"
+                @load="handleImageLoad(house._id)"
+                @error="handleImageError($event, house._id)"
+              />
+              
+              <!-- Loading Overlay -->
+              <div 
+                v-if="!loadedImages[house._id]" 
+                class="absolute inset-0 bg-gray-100 flex items-center justify-center"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-                </svg>
-              </button>
-              <button 
-                @click="changePhoto(house._id, 1)"
-                class="p-1 bg-black bg-opacity-50 text-white rounded-full hover:bg-opacity-75"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-                </svg>
-              </button>
-            </div>
-
-            <!-- Image Dots -->
-            <div 
-              v-if="loadedImages[house._id] && house.photos?.length > 1"
-              class="absolute bottom-2 left-0 right-0 flex justify-center space-x-1"
-            >
-              <button
-                v-for="(_, index) in house.photos"
-                :key="index"
-                @click="setPhotoIndex(house._id, index)"
-                class="w-2 h-2 rounded-full transition-colors"
-                :class="currentPhotoIndices[house._id] === index ? 'bg-white' : 'bg-white bg-opacity-50'"
-              ></button>
-            </div>
-          </div>
-
-          <!-- House Details -->
-          <div class="p-4">
-            <div class="flex justify-between items-start mb-2">
-              <div>
-                <h3 class="text-lg font-medium text-gray-900">{{ house.type }}</h3>
-                <p class="mt-1 text-sm text-gray-500">{{ house.location }}</p>
+                <div class="w-8 h-8 border-4 border-gray-300 border-t-gray-600 rounded-full animate-spin"></div>
               </div>
-              <span 
-                class="px-2 py-1 text-xs font-medium rounded"
-                :class="house.purpose === 'Rent' ? 'bg-gray-100 text-gray-800' : 'bg-green-100 text-green-800'"
+
+              <!-- Image Navigation -->
+              <div 
+                v-if="loadedImages[house._id] && house.photos?.length > 1" 
+                class="absolute inset-0 flex items-center justify-between px-2"
               >
-                {{ house.purpose }}
-              </span>
+                <button 
+                  @click.prevent="changePhoto(house._id, -1)"
+                  class="p-1 bg-black bg-opacity-50 text-white rounded-full hover:bg-opacity-75"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
+                <button 
+                  @click.prevent="changePhoto(house._id, 1)"
+                  class="p-1 bg-black bg-opacity-50 text-white rounded-full hover:bg-opacity-75"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+              </div>
+
+              <!-- Image Dots -->
+              <div 
+                v-if="loadedImages[house._id] && house.photos?.length > 1"
+                class="absolute bottom-2 left-0 right-0 flex justify-center space-x-1"
+              >
+                <button
+                  v-for="(_, index) in house.photos"
+                  :key="index"
+                  @click.prevent="setPhotoIndex(house._id, index)"
+                  class="w-2 h-2 rounded-full transition-colors"
+                  :class="currentPhotoIndices[house._id] === index ? 'bg-white' : 'bg-white bg-opacity-50'"
+                ></button>
+              </div>
             </div>
 
-            <div class="mt-2 flex items-center text-sm text-gray-500">
-              <span class="font-medium">KSh {{ formatPrice(house.price) }}</span>
-              <span v-if="house.purpose === 'Rent'">/month</span>
-            </div>
+            <!-- House Details -->
+            <div class="p-4">
+              <div class="flex justify-between items-start mb-2">
+                <div>
+                  <h3 class="text-lg font-medium text-gray-900">{{ house.type }}</h3>
+                  <p class="mt-1 text-sm text-gray-500">{{ house.location }}</p>
+                </div>
+                <span 
+                  class="px-2 py-1 text-xs font-medium rounded"
+                  :class="house.purpose === 'Rent' ? 'bg-gray-100 text-gray-800' : 'bg-green-100 text-green-800'"
+                >
+                  {{ house.purpose }}
+                </span>
+              </div>
 
-            <router-link
-              :to="`/house/${house._id}`"
-              class="mt-4 block w-full px-4 py-2 bg-gray-800 text-white text-center rounded-md hover:bg-gray-700 transition-colors"
-            >
-              View Details
-            </router-link>
+              <!-- Price -->
+              <div class="mt-2 flex items-center text-sm text-gray-500">
+                <span class="font-medium">KSh {{ formatPrice(house.price) }}</span>
+                <span v-if="house.purpose === 'Rent'">/month</span>
+              </div>
+
+              <!-- Status Badge -->
+              <div v-if="house.status" class="mt-2">
+                <span 
+                  class="px-2 py-1 text-xs font-medium rounded"
+                  :class="house.status === 'available' ? 'bg-blue-100 text-blue-800' : 'bg-red-100 text-red-800'"
+                >
+                  {{ house.status === 'available' ? 'Available' : 'Not Available' }}
+                </span>
+              </div>
+
+              <!-- Amenities Preview -->
+              <div v-if="hasAmenities(house)" class="mt-2 flex flex-wrap gap-1">
+                <span 
+                  v-for="(amenity, index) in getTopAmenities(house)" 
+                  :key="index"
+                  class="px-2 py-0.5 bg-gray-100 text-gray-700 text-xs rounded-full"
+                >
+                  {{ amenity }}
+                </span>
+                <span 
+                  v-if="countTotalAmenities(house) > 3" 
+                  class="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded-full"
+                >
+                  +{{ countTotalAmenities(house) - 3 }} more
+                </span>
+              </div>
+
+              <!-- View Details Button -->
+              <router-link
+                :to="`/house/${house._id}`"
+                class="mt-4 block w-full px-4 py-2 bg-gray-800 text-white text-center rounded-md hover:bg-gray-700 transition-colors"
+              >
+                View Details
+              </router-link>
+            </div>
           </div>
+        </div>
+
+        <!-- Pagination Controls -->
+        <div v-if="totalPages > 1" class="mt-8 flex justify-center">
+          <nav class="inline-flex rounded-md shadow">
+            <!-- Previous Page Button -->
+            <button
+              @click="goToPage(currentPage - 1)"
+              :disabled="currentPage === 1"
+              class="px-3 py-2 rounded-l-md border border-gray-300 bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <span class="sr-only">Previous</span>
+              <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+            
+            <!-- Page Numbers -->
+            <template v-if="totalPages <= 7">
+              <button
+                v-for="page in totalPages"
+                :key="page"
+                @click="goToPage(page)"
+                :class="[
+                  'px-4 py-2 border border-gray-300 border-l-0',
+                  currentPage === page 
+                    ? 'bg-gray-800 text-white' 
+                    : 'bg-white text-gray-700 hover:bg-gray-50'
+                ]"
+              >
+                {{ page }}
+              </button>
+            </template>
+            
+            <!-- Truncated Page Numbers for many pages -->
+            <template v-else>
+              <!-- First Page -->
+              <button
+                @click="goToPage(1)"
+                :class="[
+                  'px-4 py-2 border border-gray-300 border-l-0',
+                  currentPage === 1 
+                    ? 'bg-gray-800 text-white' 
+                    : 'bg-white text-gray-700 hover:bg-gray-50'
+                ]"
+              >
+                1
+              </button>
+              
+              <!-- Ellipsis if needed -->
+              <span v-if="currentPage > 3" class="px-4 py-2 border border-gray-300 border-l-0 bg-white text-gray-700">
+                ...
+              </span>
+              
+              <!-- Pages around current page -->
+              <button
+                v-for="page in paginationRange"
+                :key="page"
+                @click="goToPage(page)"
+                :class="[
+                  'px-4 py-2 border border-gray-300 border-l-0',
+                  currentPage === page 
+                    ? 'bg-gray-800 text-white' 
+                    : 'bg-white text-gray-700 hover:bg-gray-50'
+                ]"
+              >
+                {{ page }}
+              </button>
+              
+              <!-- Ellipsis if needed -->
+              <span v-if="currentPage < totalPages - 2" class="px-4 py-2 border border-gray-300 border-l-0 bg-white text-gray-700">
+                ...
+              </span>
+              
+              <!-- Last Page -->
+              <button
+                v-if="totalPages > 1"
+                @click="goToPage(totalPages)"
+                :class="[
+                  'px-4 py-2 border border-gray-300 border-l-0',
+                  currentPage === totalPages 
+                    ? 'bg-gray-800 text-white' 
+                    : 'bg-white text-gray-700 hover:bg-gray-50'
+                ]"
+              >
+                {{ totalPages }}
+              </button>
+            </template>
+            
+            <!-- Next Page Button -->
+            <button
+              @click="goToPage(currentPage + 1)"
+              :disabled="currentPage === totalPages"
+              class="px-3 py-2 rounded-r-md border border-gray-300 border-l-0 bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <span class="sr-only">Next</span>
+              <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          </nav>
         </div>
       </div>
     </div>
@@ -231,6 +364,9 @@ const HOUSE_TYPES = [
   'Five Bedroom'
 ];
 
+// Items per page constant
+const ITEMS_PER_PAGE = 20;
+
 export default {
   name: 'HomeView',
   
@@ -241,6 +377,9 @@ export default {
     const currentPhotoIndices = ref({});
     const loadedImages = ref({});
     const filterTimeout = ref(null);
+    
+    // Pagination state
+    const currentPage = ref(1);
     
     const filters = reactive({
       location: '',
@@ -256,6 +395,38 @@ export default {
 
     const hasActiveFilters = computed(() => {
       return Object.values(filters).some(value => value !== '' && value !== null);
+    });
+    
+    // Pagination computed properties
+    const totalPages = computed(() => {
+      return Math.ceil(houses.value.length / ITEMS_PER_PAGE);
+    });
+    
+    const paginatedHouses = computed(() => {
+      const start = (currentPage.value - 1) * ITEMS_PER_PAGE;
+      const end = start + ITEMS_PER_PAGE;
+      return houses.value.slice(start, end);
+    });
+    
+    // Generate range for pagination buttons
+    const paginationRange = computed(() => {
+      const totalPgs = totalPages.value;
+      const currentPg = currentPage.value;
+      
+      if (totalPgs <= 7) {
+        return [];
+      }
+      
+      const range = [];
+      // Always show current page and 1 page before and after (when possible)
+      const startPage = Math.max(2, currentPg - 1);
+      const endPage = Math.min(totalPgs - 1, currentPg + 1);
+      
+      for (let i = startPage; i <= endPage; i++) {
+        range.push(i);
+      }
+      
+      return range;
     });
 
     const fetchHouses = async () => {
@@ -298,6 +469,9 @@ export default {
             loadedImages.value[house._id] = false;
           }
         });
+        
+        // Reset to first page when filters change
+        currentPage.value = 1;
 
       } catch (err) {
         console.error('Error fetching houses:', err);
@@ -364,6 +538,49 @@ export default {
     const formatPrice = (price) => {
       return new Intl.NumberFormat('en-KE').format(price || 0);
     };
+    
+    // Pagination functions
+    const goToPage = (page) => {
+      if (page < 1 || page > totalPages.value) return;
+      currentPage.value = page;
+      // Scroll to top when changing pages
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+    
+    // Amenities helper functions
+    const hasAmenities = (house) => {
+      if (!house.amenities) return false;
+      
+      return (
+        Array.isArray(house.amenities.internal) && house.amenities.internal.length > 0 ||
+        Array.isArray(house.amenities.external) && house.amenities.external.length > 0 ||
+        Array.isArray(house.amenities.nearby) && house.amenities.nearby.length > 0
+      );
+    };
+    
+    const countTotalAmenities = (house) => {
+      if (!house.amenities) return 0;
+      
+      return (
+        (Array.isArray(house.amenities.internal) ? house.amenities.internal.length : 0) +
+        (Array.isArray(house.amenities.external) ? house.amenities.external.length : 0) +
+        (Array.isArray(house.amenities.nearby) ? house.amenities.nearby.length : 0)
+      );
+    };
+    
+    const getTopAmenities = (house) => {
+      if (!house.amenities) return [];
+      
+      // Combine all amenities
+      const allAmenities = [
+        ...(Array.isArray(house.amenities.internal) ? house.amenities.internal : []),
+        ...(Array.isArray(house.amenities.external) ? house.amenities.external : []),
+        ...(Array.isArray(house.amenities.nearby) ? house.amenities.nearby : [])
+      ];
+      
+      // Return up to 3 amenities
+      return allAmenities.slice(0, 3);
+    };
 
     // Watchers
     watch(() => filters.location, (newVal, oldVal) => {
@@ -416,6 +633,13 @@ export default {
       filters,
       houseTypes: HOUSE_TYPES,
       hasActiveFilters,
+      // Pagination
+      currentPage,
+      totalPages,
+      paginatedHouses,
+      paginationRange,
+      goToPage,
+      // Functions
       fetchHouses,
       getHouseImageSrc,
       handleImageLoad,
@@ -425,7 +649,11 @@ export default {
       handleFilterChange,
       clearFilter,
       resetFilters,
-      formatPrice
+      formatPrice,
+      // Amenities
+      hasAmenities,
+      countTotalAmenities,
+      getTopAmenities
     };
   }
 };
