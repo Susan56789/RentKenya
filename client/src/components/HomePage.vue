@@ -353,6 +353,7 @@
 
 <script>
 import { ref, reactive, computed, onMounted, onBeforeUnmount, watch } from 'vue';
+import { useRoute } from 'vue-router';
 
 const HOUSE_TYPES = [
   'Bed Sitter',
@@ -372,6 +373,7 @@ export default {
   
   setup() {
     const houses = ref([]);
+    const route = useRoute();
     const loading = ref(true);
     const error = ref(null);
     const currentPhotoIndices = ref({});
@@ -430,56 +432,88 @@ export default {
     });
 
     const fetchHouses = async () => {
-      loading.value = true;
-      error.value = null;
-      
-      try {
-        const queryParams = new URLSearchParams();
-        
-        if (filters.location) {
-          queryParams.append('location', filters.location);
-        }
-        if (filters.minPrice) {
-          queryParams.append('minPrice', filters.minPrice);
-        }
-        if (filters.maxPrice) {
-          queryParams.append('maxPrice', filters.maxPrice);
-        }
-        if (filters.type) {
-          queryParams.append('type', filters.type);
-        }
-        if (filters.purpose) {
-          queryParams.append('purpose', filters.purpose);
-        }
+  loading.value = true;
+  error.value = null;
+  
+ 
+  
+  try {
+    const queryParams = new URLSearchParams();
+    
+    if (filters.location) {
+     
+      queryParams.append('location', filters.location);
+    }
+    if (filters.minPrice) {
+      queryParams.append('minPrice', filters.minPrice);
+    }
+    if (filters.maxPrice) {
+      queryParams.append('maxPrice', filters.maxPrice);
+    }
+    if (filters.type) {
+      queryParams.append('type', filters.type);
+    }
+    if (filters.purpose) {
+      queryParams.append('purpose', filters.purpose);
+    }
 
-        const url = `${apiBaseUrl}/api/houses${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
-        const response = await fetch(url);
-        
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        const data = await response.json();
-        houses.value = Array.isArray(data) ? data : data.houses || [];
-        
-        // Initialize image states for new houses
-        houses.value.forEach(house => {
-          if (!currentPhotoIndices.value[house._id]) {
-            currentPhotoIndices.value[house._id] = 0;
-            loadedImages.value[house._id] = false;
-          }
-        });
-        
-        // Reset to first page when filters change
-        currentPage.value = 1;
-
-      } catch (err) {
-        console.error('Error fetching houses:', err);
-        error.value = 'Failed to load houses. Please try again later.';
-      } finally {
-        loading.value = false;
+    const url = `${apiBaseUrl}/api/houses${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+   
+    
+    const response = await fetch(url);
+    
+    if (!response.ok) {
+      console.error('API response not OK:', response.status, response.statusText);
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    
+    
+    // Determine the correct data format
+    let extractedHouses = [];
+    if (Array.isArray(data)) {
+      console.log('Data is a direct array of houses');
+      extractedHouses = data;
+    } else if (data.houses && Array.isArray(data.houses)) {
+      console.log('Data has a houses property that is an array');
+      extractedHouses = data.houses;
+    } else if (data.data && Array.isArray(data.data)) {
+      console.log('Data has a data property that is an array');
+      extractedHouses = data.data;
+    } else {
+      console.warn('Could not identify house data format:', data);
+      extractedHouses = [];
+    }
+    
+    houses.value = extractedHouses;
+    
+    // Initialize image states for new houses
+    houses.value.forEach(house => {
+      if (!currentPhotoIndices.value[house._id]) {
+        currentPhotoIndices.value[house._id] = 0;
+        loadedImages.value[house._id] = false;
       }
-    };
+    });
+    
+    // Reset to first page when filters change
+    currentPage.value = 1;
+
+  } catch (err) {
+    console.error('Error fetching houses:', err);
+    
+    // More detailed error handling
+    if (err.name === 'TypeError' && err.message.includes('Failed to fetch')) {
+      error.value = 'Network error. Please check your connection and try again.';
+    } else if (err.name === 'SyntaxError') {
+      error.value = 'Received invalid data from server. Please try again.';
+    } else {
+      error.value = 'Failed to load houses. Please try again later.';
+    }
+  } finally {
+    loading.value = false;
+  }
+};
 
     const getHouseImageSrc = (houseId) => {
       const house = houses.value.find(h => h._id === houseId);
@@ -587,6 +621,14 @@ export default {
       if (newVal !== oldVal) handleFilterChange();
     });
 
+    // Watch for route query changes to update filters
+watch(() => route.query, (newQuery) => {
+  if (newQuery.location) {
+    filters.location = newQuery.location;
+    fetchHouses();
+  }
+}, { immediate: true });
+
     watch(() => filters.minPrice, (newVal, oldVal) => {
       if (newVal !== oldVal) {
         if (filters.maxPrice && Number(newVal) > Number(filters.maxPrice)) {
@@ -615,8 +657,14 @@ export default {
 
     // Lifecycle hooks
     onMounted(() => {
-      fetchHouses();
-    });
+  // Check for location parameter in URL
+  if (route.query.location) {
+    filters.location = route.query.location;
+  }
+  
+  // Then fetch houses
+  fetchHouses();
+});
 
     onBeforeUnmount(() => {
       if (filterTimeout.value) {
