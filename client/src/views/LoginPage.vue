@@ -7,9 +7,9 @@
         <!-- Social Login Buttons -->
         <div class="space-y-3 mb-6">
           <button
-            v-if="isGoogleLoginEnabled"
-            @click="initializeGoogleLogin"
+            @click="handleGoogleLogin"
             class="w-full flex items-center justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+            :disabled="isGoogleLoading"
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 256 256" class="mr-2">
               <path fill="#4285F4" d="M213.272 127.535c0-9.482-0.854-18.618-2.432-27.335H128v51.696h72.572a62.169 62.169 0 0 1-26.89 40.905v33.511h43.515c25.457-23.45 40.075-58.007 40.075-97.777Z"/>
@@ -17,12 +17,11 @@
               <path fill="#FBBC05" d="M52.784 97.486c-2.69-8.001-2.69-16.667 0-24.668V38.217H8.358A127.788 127.788 0 0 0 0 128c0 20.579 4.908 40.007 13.358 57.783l43.426-33.511a76.005 76.005 0 0 1-4-54.786Z"/>
               <path fill="#EA4335" d="M128 50.786c19.787 0 37.59 7.075 51.596 20.904l38.7-38.7C194.251 12.901 162.565 0 128 0 78.958 0 34.247 28.684 13.358 70.217l43.426 33.511c10.585-31.689 40.234-55.342 75.216-55.342Z"/>
             </svg>
-            Sign in with Google
+            {{ isGoogleLoading ? 'Loading...' : 'Sign in with Google' }}
           </button>
 
           <button
-            v-if="isFacebookLoginEnabled"
-            @click="initializeFacebookLogin"
+            @click="handleFacebookLogin"
             class="w-full flex items-center justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 256 256" class="mr-2">
@@ -86,6 +85,19 @@
             </div>
           </div>
 
+          <!-- Remember Me Checkbox -->
+          <div class="flex items-center">
+            <input
+              id="remember-me"
+              type="checkbox"
+              v-model="form.rememberMe"
+              class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+            />
+            <label for="remember-me" class="ml-2 block text-sm text-gray-700">
+              Remember me
+            </label>
+          </div>
+
           <!-- Forgot Password -->
           <div class="flex justify-end">
             <router-link
@@ -100,7 +112,7 @@
           <button
             type="submit"
             :disabled="isLoading"
-            class="w-full bg-gray-500 text-white py-2 rounded-md hover:bg-gray-600 transition duration-300 disabled:opacity-50"
+            class="w-full bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700 transition duration-300 disabled:opacity-50"
           >
             {{ isLoading ? 'Logging in...' : 'Login' }}
           </button>
@@ -124,7 +136,7 @@
 </template>
 
 <script>
-import { ref, reactive, onMounted, computed } from 'vue';
+import { ref, reactive, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { Eye as EyeIcon, EyeOff as EyeOffIcon } from 'lucide-vue-next';
 import axios from 'axios';
@@ -143,7 +155,9 @@ export default {
     const auth = useAuth();
     const error = ref('');
     const isLoading = ref(false);
+    const isGoogleLoading = ref(false);
     const showPassword = ref(false);
+    const googleInitialized = ref(false);
 
     const form = reactive({
       email: '',
@@ -151,51 +165,105 @@ export default {
       rememberMe: false
     });
 
-    // Safely get Social Login Client IDs
+    // Get Google Client ID from environment variables
+    // NOTE: Make sure this is set as VITE_GOOGLE_CLIENT_ID in your .env file
     const googleClientId = import.meta.env?.VITE_GOOGLE_CLIENT_ID || '';
-    const facebookClientId = import.meta.env?.VITE_FACEBOOK_CLIENT_ID || '';
 
-    // Compute if Social Logins are enabled
-    const isGoogleLoginEnabled = computed(() => !!googleClientId);
-    const isFacebookLoginEnabled = computed(() => !!facebookClientId);
+    // Load Google API script and initialize Google Sign-In
+    const loadGoogleApi = () => {
+      if (googleInitialized.value) return;
 
-    const initializeGoogleLogin = () => {
-      // Check if Google auth is available and client ID exists
-      if (!window.google || !googleClientId) {
-        error.value = 'Google authentication is not available';
+      const script = document.createElement('script');
+      script.src = 'https://accounts.google.com/gsi/client';
+      script.async = true;
+      script.defer = true;
+      
+      script.onload = () => {
+        googleInitialized.value = true;
+        console.log('Google API script loaded successfully');
+      };
+      
+      script.onerror = () => {
+        console.error('Failed to load Google API script');
+        error.value = 'Failed to load Google authentication';
+      };
+      
+      document.head.appendChild(script);
+    };
+
+    // Handle Google Sign-In button click
+    const handleGoogleLogin = () => {
+      if (!googleClientId) {
+        error.value = 'Google authentication is not properly configured';
+        console.error('Google Client ID is not defined. Check your environment variables.');
         return;
       }
 
+      isGoogleLoading.value = true;
+      
+      // Make sure Google API is initialized
+      if (!window.google || !window.google.accounts) {
+        if (!googleInitialized.value) {
+          // Try loading the script again if it wasn't loaded properly
+          loadGoogleApi();
+          setTimeout(handleGoogleLogin, 1000); // Retry after a delay
+          return;
+        } else {
+          error.value = 'Google authentication is not available';
+          isGoogleLoading.value = false;
+          return;
+        }
+      }
+
       try {
-        const googleAuth = window.google.accounts.id;
-        googleAuth.initialize({
+        window.google.accounts.id.initialize({
           client_id: googleClientId,
-          callback: handleGoogleResponse
+          callback: handleGoogleResponse,
+          cancel_on_tap_outside: true,
+          context: 'signin'
         });
 
-        googleAuth.prompt();
+        window.google.accounts.id.prompt((notification) => {
+          if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+            // Try to display the One Tap UI or the regular sign-in button
+            window.google.accounts.id.renderButton(
+              document.getElementById('googleLoginButton') || document.createElement('div'),
+              { theme: 'outline', size: 'large', width: '100%' }
+            );
+            isGoogleLoading.value = false;
+            
+            if (notification.isNotDisplayed()) {
+              console.warn('Google One Tap not displayed:', notification.getNotDisplayedReason());
+            } else if (notification.isSkippedMoment()) {
+              console.warn('Google One Tap skipped:', notification.getSkippedReason());
+            }
+          }
+        });
       } catch (err) {
         console.error('Google Auth Initialization Error:', err);
         error.value = 'Failed to initialize Google authentication';
+        isGoogleLoading.value = false;
       }
     };
 
-    const initializeFacebookLogin = () => {
-      // Placeholder for Facebook login logic
+    // Handle Facebook Sign-In button click
+    const handleFacebookLogin = () => {
       error.value = 'Facebook login is not yet implemented';
     };
 
+    // Process the response from Google Sign-In
     const handleGoogleResponse = async (response) => {
       try {
         isLoading.value = true;
+        isGoogleLoading.value = false;
         error.value = '';
 
         // Send Google token to backend for verification and login
-        const backendResponse = await axios.post('https://rentkenya.onrender.com/api/users/google-login', {
+        const backendResponse = await axios.post('/api/users/google-login', {
           token: response.credential
         });
 
-        const { token } = backendResponse.data;
+        const { token, user } = backendResponse.data;
         
         if (!token) {
           throw new Error('No token received from server');
@@ -206,6 +274,11 @@ export default {
         
         // Use auth.setToken which will handle both localStorage and axios headers
         auth.setToken(tokenString);
+        
+        // Store user data if needed
+        if (user) {
+          localStorage.setItem('user', JSON.stringify(user));
+        }
 
         // Always remember Google logins
         localStorage.setItem('rememberMe', 'true');
@@ -220,6 +293,7 @@ export default {
       }
     };
 
+    // Validate the login form
     const validateForm = () => {
       if (!form.email || !form.password) {
         error.value = 'Please fill in all fields';
@@ -235,6 +309,7 @@ export default {
       return true;
     };
 
+    // Handle standard email/password login
     const handleLogin = async () => {
       error.value = '';
       
@@ -250,7 +325,7 @@ export default {
           password: form.password
         });
 
-        const { token } = response.data;
+        const { token, user } = response.data;
         
         if (!token) {
           throw new Error('No token received from server');
@@ -261,6 +336,11 @@ export default {
         
         // Use auth.setToken which will handle both localStorage and axios headers
         auth.setToken(tokenString);
+        
+        // Store user data if needed
+        if (user) {
+          localStorage.setItem('user', JSON.stringify(user));
+        }
 
         // Handle remember me preference
         if (form.rememberMe) {
@@ -279,31 +359,24 @@ export default {
       }
     };
 
+    // Toggle password visibility
     const togglePassword = () => {
       showPassword.value = !showPassword.value;
     };
 
-    // Load Google Auth script
+    // Initialize Google API on component mount
     onMounted(() => {
-      // Only load script if Google login is enabled
-      if (isGoogleLoginEnabled.value) {
-        const script = document.createElement('script');
-        script.src = 'https://accounts.google.com/gsi/client';
-        script.async = true;
-        script.defer = true;
-        document.head.appendChild(script);
-      }
+      loadGoogleApi();
     });
 
     return {
       form,
       error,
       isLoading,
+      isGoogleLoading,
       showPassword,
-      isGoogleLoginEnabled,
-      isFacebookLoginEnabled,
-      initializeGoogleLogin,
-      initializeFacebookLogin,
+      handleGoogleLogin,
+      handleFacebookLogin,
       handleLogin,
       togglePassword
     };
