@@ -165,13 +165,31 @@ export default {
       rememberMe: false
     });
 
-    // Get Google Client ID from environment variables
-    // NOTE: Make sure this is set as VITE_GOOGLE_CLIENT_ID in your .env file
-    const googleClientId = import.meta.env?.VITE_GOOGLE_CLIENT_ID || '';
+    // Get Google Client ID from Vue CLI environment variables
+    const googleClientId = process.env.VUE_APP_GOOGLE_CLIENT_ID;
+    
+    
+    
+    // Check if client ID is available on component mount
+    onMounted(() => {
+      if (!googleClientId) {
+        console.error('VUE_APP_GOOGLE_CLIENT_ID is missing in environment variables');
+        // Don't show error to user immediately, only when they try to use Google login
+      } else {
+        
+        loadGoogleApi();
+      }
+    });
 
-    // Load Google API script and initialize Google Sign-In
+    // Load Google API script with better error handling
     const loadGoogleApi = () => {
       if (googleInitialized.value) return;
+      
+      // Check if the script is already loaded
+      if (document.querySelector('script[src="https://accounts.google.com/gsi/client"]')) {
+        googleInitialized.value = true;
+        return;
+      }
 
       const script = document.createElement('script');
       script.src = 'https://accounts.google.com/gsi/client';
@@ -180,22 +198,24 @@ export default {
       
       script.onload = () => {
         googleInitialized.value = true;
-        console.log('Google API script loaded successfully');
       };
       
       script.onerror = () => {
         console.error('Failed to load Google API script');
-        error.value = 'Failed to load Google authentication';
+        error.value = 'Failed to load Google authentication service';
       };
       
       document.head.appendChild(script);
     };
 
-    // Handle Google Sign-In button click
+    // Handle Google Sign-In button click with improved error messages
     const handleGoogleLogin = () => {
+      // Clear any previous errors
+      error.value = '';
+      
       if (!googleClientId) {
-        error.value = 'Google authentication is not properly configured';
-        console.error('Google Client ID is not defined. Check your environment variables.');
+        error.value = 'Google authentication is not properly configured. Please contact support.';
+        console.error('Missing Google Client ID. Check your .env file and ensure VUE_APP_GOOGLE_CLIENT_ID is set.');
         return;
       }
 
@@ -204,17 +224,33 @@ export default {
       // Make sure Google API is initialized
       if (!window.google || !window.google.accounts) {
         if (!googleInitialized.value) {
-          // Try loading the script again if it wasn't loaded properly
+          // Try loading the script again
           loadGoogleApi();
-          setTimeout(handleGoogleLogin, 1000); // Retry after a delay
+          
+          // Set a timeout to check if Google API loaded
+          setTimeout(() => {
+            if (!window.google || !window.google.accounts) {
+              error.value = 'Google authentication service is currently unavailable. Please try again later.';
+              isGoogleLoading.value = false;
+            } else {
+              // If loaded, proceed with Google login
+              initializeGoogleAuth();
+            }
+          }, 2000);
           return;
         } else {
-          error.value = 'Google authentication is not available';
+          error.value = 'Google authentication service is not available. Please try again later.';
           isGoogleLoading.value = false;
           return;
         }
       }
 
+      // If Google API is already loaded, initialize auth directly
+      initializeGoogleAuth();
+    };
+
+    // Separated Google Auth initialization for better code organization
+    const initializeGoogleAuth = () => {
       try {
         window.google.accounts.id.initialize({
           client_id: googleClientId,
@@ -225,41 +261,46 @@ export default {
 
         window.google.accounts.id.prompt((notification) => {
           if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-            // Try to display the One Tap UI or the regular sign-in button
+            // Try to display the regular sign-in button
+            const buttonContainer = document.createElement('div');
+            buttonContainer.id = 'googleLoginButton';
+            document.body.appendChild(buttonContainer);
+            
             window.google.accounts.id.renderButton(
-              document.getElementById('googleLoginButton') || document.createElement('div'),
+              buttonContainer,
               { theme: 'outline', size: 'large', width: '100%' }
             );
+            
             isGoogleLoading.value = false;
             
             if (notification.isNotDisplayed()) {
               console.warn('Google One Tap not displayed:', notification.getNotDisplayedReason());
+              
             } else if (notification.isSkippedMoment()) {
               console.warn('Google One Tap skipped:', notification.getSkippedReason());
+             
             }
           }
         });
       } catch (err) {
         console.error('Google Auth Initialization Error:', err);
-        error.value = 'Failed to initialize Google authentication';
+        error.value = 'Failed to initialize Google authentication. Please try again later.';
         isGoogleLoading.value = false;
       }
     };
 
-    // Handle Facebook Sign-In button click
+    // The rest of your component code remains the same
     const handleFacebookLogin = () => {
       error.value = 'Facebook login is not yet implemented';
     };
 
-    // Process the response from Google Sign-In
     const handleGoogleResponse = async (response) => {
       try {
         isLoading.value = true;
         isGoogleLoading.value = false;
         error.value = '';
 
-        // Send Google token to backend for verification and login
-        const backendResponse = await axios.post('/api/users/google-login', {
+        const backendResponse = await axios.post('https://rentkenya.onrender.com/api/users/google-login', {
           token: response.credential
         });
 
@@ -269,31 +310,23 @@ export default {
           throw new Error('No token received from server');
         }
 
-        // Create token string with Bearer prefix
         const tokenString = `Bearer ${token}`;
-        
-        // Use auth.setToken which will handle both localStorage and axios headers
         auth.setToken(tokenString);
         
-        // Store user data if needed
         if (user) {
           localStorage.setItem('user', JSON.stringify(user));
         }
 
-        // Always remember Google logins
         localStorage.setItem('rememberMe', 'true');
-
-        // Navigate to home
         router.push('/');
       } catch (err) {
         console.error('Google Login Error:', err);
-        error.value = err.response?.data?.message || 'Google login failed';
+        error.value = err.response?.data?.message || 'Google login failed. Please try again.';
       } finally {
         isLoading.value = false;
       }
     };
 
-    // Validate the login form
     const validateForm = () => {
       if (!form.email || !form.password) {
         error.value = 'Please fill in all fields';
@@ -309,7 +342,6 @@ export default {
       return true;
     };
 
-    // Handle standard email/password login
     const handleLogin = async () => {
       error.value = '';
       
@@ -331,25 +363,19 @@ export default {
           throw new Error('No token received from server');
         }
 
-        // Create token string with Bearer prefix
         const tokenString = `Bearer ${token}`;
-        
-        // Use auth.setToken which will handle both localStorage and axios headers
         auth.setToken(tokenString);
         
-        // Store user data if needed
         if (user) {
           localStorage.setItem('user', JSON.stringify(user));
         }
 
-        // Handle remember me preference
         if (form.rememberMe) {
           localStorage.setItem('rememberMe', 'true');
         } else {
           localStorage.removeItem('rememberMe');
         }
 
-        // Navigate to home
         router.push('/');
       } catch (err) {
         console.error('Login Error:', err);
@@ -359,15 +385,9 @@ export default {
       }
     };
 
-    // Toggle password visibility
     const togglePassword = () => {
       showPassword.value = !showPassword.value;
     };
-
-    // Initialize Google API on component mount
-    onMounted(() => {
-      loadGoogleApi();
-    });
 
     return {
       form,

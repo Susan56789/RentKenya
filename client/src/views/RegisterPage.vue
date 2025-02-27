@@ -143,6 +143,7 @@ export default {
     const showPassword = ref(false);
     const isGoogleRegistration = ref(false);
     const googleInitialized = ref(false);
+    const googleButtonRef = ref(null);
 
     const form = reactive({
       username: '',
@@ -154,12 +155,19 @@ export default {
       name: ''
     });
 
-    // Get Google Client ID from environment variables - make sure it has VITE_ prefix
-    const googleClientId = import.meta.env?.VITE_GOOGLE_CLIENT_ID || '';
+    // Get Google Client ID from environment variables - for Vue CLI
+    const googleClientId = process.env.VUE_APP_GOOGLE_CLIENT_ID;
 
-    // Load Google API script
+    // Load Google API script with better error handling
     const loadGoogleApi = () => {
       if (googleInitialized.value) return;
+      
+      // Check if the script is already loaded
+      if (document.querySelector('script[src="https://accounts.google.com/gsi/client"]')) {
+        googleInitialized.value = true;
+        
+        return;
+      }
 
       const script = document.createElement('script');
       script.src = 'https://accounts.google.com/gsi/client';
@@ -168,22 +176,25 @@ export default {
       
       script.onload = () => {
         googleInitialized.value = true;
-        console.log('Google API script loaded successfully');
+       
       };
       
-      script.onerror = () => {
-        console.error('Failed to load Google API script');
-        error.value = 'Failed to load Google authentication';
+      script.onerror = (e) => {
+        console.error('Failed to load Google API script:', e);
+        error.value = 'Failed to load Google authentication service';
       };
       
       document.head.appendChild(script);
     };
 
-    // Handle Google Sign-In button click
+    // Handle Google Sign-In button click with improved error messages
     const handleGoogleRegistration = () => {
+      // Clear any previous errors
+      error.value = '';
+      
       if (!googleClientId) {
-        error.value = 'Google authentication is not properly configured';
-        console.error('Google Client ID is not defined. Check your environment variables.');
+        error.value = 'Google authentication is not properly configured. Please contact support.';
+        console.error('Missing Google Client ID. Check your .env file and ensure VUE_APP_GOOGLE_CLIENT_ID is set.');
         return;
       }
 
@@ -192,27 +203,81 @@ export default {
       // Make sure Google API is initialized
       if (!window.google || !window.google.accounts) {
         if (!googleInitialized.value) {
-          // Try loading the script again if it wasn't loaded properly
+          // Try loading the script again
           loadGoogleApi();
-          setTimeout(handleGoogleRegistration, 1000); // Retry after a delay
+          
+          // Set a timeout to check if Google API loaded
+          setTimeout(() => {
+            if (!window.google || !window.google.accounts) {
+              error.value = 'Google authentication service is currently unavailable. Please try again later.';
+              isGoogleLoading.value = false;
+              console.error('Google API not available after loading attempt');
+            } else {
+              // If loaded, proceed with Google login
+              initializeGoogleAuth();
+            }
+          }, 2000);
           return;
         } else {
-          error.value = 'Google authentication is not available';
+          error.value = 'Google authentication service is not available. Please try again later.';
           isGoogleLoading.value = false;
+          console.error('Google API not available despite script being loaded');
           return;
         }
       }
 
-      try {
+      // If Google API is already loaded, initialize auth directly
+      initializeGoogleAuth();
+    };
+
+    // Separated Google Auth initialization for better code organization
+    const initializeGoogleAuth = () => {
+      try { 
         window.google.accounts.id.initialize({
           client_id: googleClientId,
           callback: handleGoogleResponse,
           cancel_on_tap_outside: true,
-          context: 'signup'
+          context: 'signup',
+          ux_mode: 'popup'
         });
 
+        
         window.google.accounts.id.prompt((notification) => {
+          
           if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+            // Create a dedicated button container if One Tap doesn't work
+            const buttonContainer = document.createElement('div');
+            buttonContainer.id = 'googleButtonContainer';
+            document.body.appendChild(buttonContainer);
+            
+            // Render the standard sign-in button
+            window.google.accounts.id.renderButton(
+              buttonContainer,
+              { 
+                type: 'standard', 
+                theme: 'outline', 
+                size: 'large',
+                text: 'signup_with',
+                shape: 'rectangular',
+                logo_alignment: 'left',
+                width: 240
+              }
+            );
+            
+            // Programmatically click the rendered button
+            setTimeout(() => {
+              const googleButton = document.querySelector('#googleButtonContainer div[role="button"]');
+              if (googleButton) {
+                googleButton.click();
+              } else {
+                console.error('Google button not found in DOM');
+                error.value = 'Could not initiate Google sign-in';
+              }
+              
+              // Clean up the temporary button
+              document.body.removeChild(buttonContainer);
+            }, 100);
+            
             isGoogleLoading.value = false;
             
             if (notification.isNotDisplayed()) {
@@ -224,14 +289,18 @@ export default {
         });
       } catch (err) {
         console.error('Google Auth Initialization Error:', err);
-        error.value = 'Failed to initialize Google authentication';
+        error.value = 'Failed to initialize Google authentication. Please try again later.';
         isGoogleLoading.value = false;
       }
     };
 
-    // Process the response from Google Sign-In
+    // Process the response from Google Sign-In with improved error handling
     const handleGoogleResponse = async (response) => {
       try {
+        if (!response || !response.credential) {
+          throw new Error('Invalid Google response');
+        }
+        
         isLoading.value = true;
         isGoogleLoading.value = false;
         isGoogleRegistration.value = true;
@@ -249,7 +318,9 @@ export default {
         form.avatarUrl = googlePayload.picture || null;
 
         // Send Google token to backend for registration
-        const { data } = await axios.post('https://rentkenya.onrender.com/api/users/register', {
+        const apiUrl = 'https://rentkenya.onrender.com/api/users/register';
+        
+        const { data } = await axios.post(apiUrl, {
           email: form.email,
           username: form.username,
           googleId: form.googleId,
@@ -264,7 +335,18 @@ export default {
         router.push('/login?registered=google');
       } catch (err) {
         console.error('Google Registration Error:', err);
-        error.value = err.response?.data?.message || 'Google registration failed';
+        
+        // Improved error handling with specific messages
+        if (err.response?.status === 409) {
+          error.value = 'An account with this email already exists. Please use the login page instead.';
+        } else if (err.response?.data?.message) {
+          error.value = err.response.data.message;
+        } else if (err.message) {
+          error.value = `Google registration failed: ${err.message}`;
+        } else {
+          error.value = 'Google registration failed. Please try again later.';
+        }
+        
         isGoogleRegistration.value = false;
       } finally {
         isLoading.value = false;
@@ -308,7 +390,8 @@ export default {
       isLoading.value = true;
 
       try {
-        const { data } = await axios.post('https://rentkenya.onrender.com/api/users/register', {
+        const apiUrl = 'https://rentkenya.onrender.com/api/users/register';
+        const { data } = await axios.post(apiUrl, {
           username: form.username.trim(),
           email: form.email.trim(),
           password: form.password,
@@ -324,7 +407,15 @@ export default {
         router.push('/login?registered=email');
       } catch (err) {
         console.error('Registration Error:', err);
-        error.value = err.response?.data?.message || 'Registration failed. Please try again.';
+        
+        // Improved error handling with specific messages
+        if (err.response?.status === 409) {
+          error.value = 'This username or email is already taken. Please try another.';
+        } else if (err.response?.data?.message) {
+          error.value = err.response.data.message;
+        } else {
+          error.value = 'Registration failed. Please try again later.';
+        }
       } finally {
         isLoading.value = false;
       }
@@ -378,7 +469,12 @@ export default {
 
     // Initialize Google API on component mount
     onMounted(() => {
-      loadGoogleApi();
+      if (googleClientId) {
+        console.log('Loading Google API on component mount');
+        loadGoogleApi();
+      } else {
+        console.error('Google Client ID not available on component mount');
+      }
     });
 
     return {
@@ -389,7 +485,8 @@ export default {
       showPassword,
       isGoogleRegistration,
       handleGoogleRegistration,
-      handleRegister
+      handleRegister,
+      googleButtonRef
     };
   }
 };

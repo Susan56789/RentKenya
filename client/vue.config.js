@@ -5,7 +5,17 @@ module.exports = defineConfig({
   publicPath: '/',  
   transpileDependencies: true,
 
-
+  chainWebpack: config => {
+    config.plugin('define').tap(args => {
+      const env = args[0]['process.env'];
+      
+      // Add any custom environment variables here
+      env.VUE_APP_GOOGLE_CLIENT_ID = JSON.stringify(process.env.VUE_APP_GOOGLE_CLIENT_ID);
+      env.VUE_APP_FACEBOOK_CLIENT_ID = JSON.stringify(process.env.VUE_APP_FACEBOOK_CLIENT_ID);
+      
+      return args;
+    });
+  },
   css: {
     loaderOptions: {
       postcss: {
