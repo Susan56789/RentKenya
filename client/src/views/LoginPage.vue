@@ -251,43 +251,54 @@ export default {
 
     // Separated Google Auth initialization for better code organization
     const initializeGoogleAuth = () => {
-      try {
-        window.google.accounts.id.initialize({
-          client_id: googleClientId,
-          callback: handleGoogleResponse,
-          cancel_on_tap_outside: true,
-          context: 'signin'
-        });
+  try {
+    window.google.accounts.id.initialize({
+      client_id: googleClientId,
+      callback: handleGoogleResponse,
+      cancel_on_tap_outside: true,
+      context: 'signin',
+      use_fedcm_for_prompt: true  
+    });
 
-        window.google.accounts.id.prompt((notification) => {
-          if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-            // Try to display the regular sign-in button
-            const buttonContainer = document.createElement('div');
-            buttonContainer.id = 'googleLoginButton';
-            document.body.appendChild(buttonContainer);
-            
-            window.google.accounts.id.renderButton(
-              buttonContainer,
-              { theme: 'outline', size: 'large', width: '100%' }
-            );
-            
-            isGoogleLoading.value = false;
-            
-            if (notification.isNotDisplayed()) {
-              console.warn('Google One Tap not displayed:', notification.getNotDisplayedReason());
-              
-            } else if (notification.isSkippedMoment()) {
-              console.warn('Google One Tap skipped:', notification.getSkippedReason());
-             
-            }
-          }
-        });
-      } catch (err) {
-        console.error('Google Auth Initialization Error:', err);
-        error.value = 'Failed to initialize Google authentication. Please try again later.';
+    window.google.accounts.id.prompt((notification) => {
+      // Use getMomentType() to handle different moment scenarios in FedCM-compatible way
+      const momentType = notification.getMomentType();
+      console.log('Google prompt moment type:', momentType);
+      
+      // If there's no moment type or it's a skipped/not displayed moment
+      if (!momentType || 
+          notification.isDismissedMoment() || 
+          notification.isNotDisplayed() || 
+          notification.isSkippedMoment()) {
+        
+        // Fall back to the standard button approach
+        const buttonContainer = document.createElement('div');
+        buttonContainer.id = 'googleLoginButton';
+        document.body.appendChild(buttonContainer);
+        
+        window.google.accounts.id.renderButton(
+          buttonContainer,
+          { theme: 'outline', size: 'large', width: '100%' }
+        );
+        
         isGoogleLoading.value = false;
+        
+        // Log specific reasons for debugging, but using future-proof methods where possible
+        if (notification.isNotDisplayed()) {
+          console.warn('Google One Tap not displayed:', notification.getNotDisplayedReason());
+        } else if (notification.isSkippedMoment()) {
+          console.warn('Google One Tap skipped:', notification.getSkippedReason());
+        } else if (notification.isDismissedMoment()) {
+          console.warn('Google One Tap dismissed');
+        }
       }
-    };
+    });
+  } catch (err) {
+    console.error('Google Auth Initialization Error:', err);
+    error.value = 'Failed to initialize Google authentication. Please try again later.';
+    isGoogleLoading.value = false;
+  }
+};
 
     // The rest of your component code remains the same
     const handleFacebookLogin = () => {
