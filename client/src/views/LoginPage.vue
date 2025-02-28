@@ -261,36 +261,29 @@ export default {
     });
 
     window.google.accounts.id.prompt((notification) => {
-      // Use getMomentType() to handle different moment scenarios in FedCM-compatible way
-      const momentType = notification.getMomentType();
-      console.log('Google prompt moment type:', momentType);
-      
-      // If there's no moment type or it's a skipped/not displayed moment
-      if (!momentType || 
-          notification.isDismissedMoment() || 
-          notification.isNotDisplayed() || 
-          notification.isSkippedMoment()) {
+      // Use the new FedCM-compatible approach
+      if (notification && notification.getMomentType) {
+        const momentType = notification.getMomentType();
+        console.log('Google prompt moment type:', momentType);
         
-        // Fall back to the standard button approach
-        const buttonContainer = document.createElement('div');
-        buttonContainer.id = 'googleLoginButton';
-        document.body.appendChild(buttonContainer);
-        
-        window.google.accounts.id.renderButton(
-          buttonContainer,
-          { theme: 'outline', size: 'large', width: '100%' }
-        );
-        
-        isGoogleLoading.value = false;
-        
-        // Log specific reasons for debugging, but using future-proof methods where possible
-        if (notification.isNotDisplayed()) {
-          console.warn('Google One Tap not displayed:', notification.getNotDisplayedReason());
-        } else if (notification.isSkippedMoment()) {
-          console.warn('Google One Tap skipped:', notification.getSkippedReason());
-        } else if (notification.isDismissedMoment()) {
-          console.warn('Google One Tap dismissed');
+        // Check if we need to fall back to button rendering
+        if (!momentType || momentType === 'dismissed' || 
+            momentType === 'skipped' || momentType === 'notDisplayed') {
+          
+          renderGoogleButton();
+          
+          // Log specific reasons for debugging
+          if (momentType === 'notDisplayed' && notification.getNotDisplayedReason) {
+            console.warn('Google One Tap not displayed:', notification.getNotDisplayedReason());
+          } else if (momentType === 'skipped' && notification.getSkippedReason) {
+            console.warn('Google One Tap skipped:', notification.getSkippedReason());
+          } else if (momentType === 'dismissed') {
+            console.warn('Google One Tap dismissed');
+          }
         }
+      } else {
+        // Fallback for older browsers or if notification object doesn't have expected methods
+        renderGoogleButton();
       }
     });
   } catch (err) {
@@ -298,6 +291,30 @@ export default {
     error.value = 'Failed to initialize Google authentication. Please try again later.';
     isGoogleLoading.value = false;
   }
+};
+
+// Separate function to render the Google button
+const renderGoogleButton = () => {
+  // Clean up any existing button first
+  const existingButton = document.getElementById('googleLoginButton');
+  if (existingButton) {
+    existingButton.remove();
+  }
+  
+  const buttonContainer = document.createElement('div');
+  buttonContainer.id = 'googleLoginButton';
+  document.body.appendChild(buttonContainer);
+  
+  window.google.accounts.id.renderButton(
+    buttonContainer,
+    { 
+      theme: 'outline', 
+      size: 'large', 
+      width: 320  // Fixed width in pixels instead of percentage
+    }
+  );
+  
+  isGoogleLoading.value = false;
 };
 
     // The rest of your component code remains the same

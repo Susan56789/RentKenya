@@ -243,53 +243,19 @@ export default {
     });
 
     window.google.accounts.id.prompt((notification) => {
-      // Get the moment type (FedCM-compatible approach)
-      const momentType = notification.getMomentType();
-      console.log('Google prompt moment type:', momentType);
-      
-      // Check using both old and new methods for compatibility
-      if (!momentType || notification.isNotDisplayed() || notification.isSkippedMoment()) {
-        // Create a dedicated button container if One Tap doesn't work
-        const buttonContainer = document.createElement('div');
-        buttonContainer.id = 'googleButtonContainer';
-        document.body.appendChild(buttonContainer);
+      // Use the new FedCM-compatible approach
+      if (notification && notification.getMomentType) {
+        const momentType = notification.getMomentType();
+        console.log('Google prompt moment type:', momentType);
         
-        // Render the standard sign-in button
-        window.google.accounts.id.renderButton(
-          buttonContainer,
-          { 
-            type: 'standard', 
-            theme: 'outline', 
-            size: 'large',
-            text: 'signup_with',
-            shape: 'rectangular',
-            logo_alignment: 'left',
-            width: 240
-          }
-        );
-        
-        // Programmatically click the rendered button
-        setTimeout(() => {
-          const googleButton = document.querySelector('#googleButtonContainer div[role="button"]');
-          if (googleButton) {
-            googleButton.click();
-          } else {
-            console.error('Google button not found in DOM');
-            error.value = 'Could not initiate Google sign-in';
-          }
-          
-          // Clean up the temporary button
-          document.body.removeChild(buttonContainer);
-        }, 100);
-        
-        isGoogleLoading.value = false;
-        
-        // Logging for debugging - will be deprecated in future
-        if (notification.isNotDisplayed()) {
-          console.warn('Google One Tap not displayed:', notification.getNotDisplayedReason());
-        } else if (notification.isSkippedMoment()) {
-          console.warn('Google One Tap skipped:', notification.getSkippedReason());
+        // Check if we need to fall back to button rendering
+        if (!momentType || momentType === 'dismissed' || 
+            momentType === 'skipped' || momentType === 'notDisplayed') {
+          renderGoogleButton();
         }
+      } else {
+        // Fallback for older browsers or if notification object doesn't have expected methods
+        renderGoogleButton();
       }
     });
   } catch (err) {
@@ -297,6 +263,50 @@ export default {
     error.value = 'Failed to initialize Google authentication. Please try again later.';
     isGoogleLoading.value = false;
   }
+};
+
+// Separate function to render the Google button
+const renderGoogleButton = () => {
+  // Clean up any existing button first
+  const existingButton = document.getElementById('googleButtonContainer');
+  if (existingButton) {
+    existingButton.remove();
+  }
+  
+  // Create a dedicated button container
+  const buttonContainer = document.createElement('div');
+  buttonContainer.id = 'googleButtonContainer';
+  document.body.appendChild(buttonContainer);
+  
+  // Render the standard sign-in button
+  window.google.accounts.id.renderButton(
+    buttonContainer,
+    { 
+      type: 'standard', 
+      theme: 'outline', 
+      size: 'large',
+      text: 'signup_with',
+      shape: 'rectangular',
+      logo_alignment: 'left',
+      width: 240  // Fixed width in pixels
+    }
+  );
+  
+  // Programmatically click the rendered button
+  setTimeout(() => {
+    const googleButton = document.querySelector('#googleButtonContainer div[role="button"]');
+    if (googleButton) {
+      googleButton.click();
+    } else {
+      console.error('Google button not found in DOM');
+      error.value = 'Could not initiate Google sign-in';
+    }
+    
+    // Clean up the temporary button
+    document.body.removeChild(buttonContainer);
+  }, 100);
+  
+  isGoogleLoading.value = false;
 };
 
     // Process the response from Google Sign-In with improved error handling
